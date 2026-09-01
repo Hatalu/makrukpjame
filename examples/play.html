@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Engine MakrukThai — เล่นกับบอท</title>
+<style>
+  :root {
+    --bg: #14110e; --panel: #201b16; --line: #3a322a; --text: #ece3d6; --muted: #9c8f7d;
+    --lightsq: #e9d3ac; --darksq: #a9743f; --sel: #6fbf5e; --hint: rgba(111,191,94,.55);
+    --wpiece: #fefaf2; --bpiece: #211a14; --accent: #e0a44a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", Tahoma, system-ui, sans-serif; }
+  header { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 18px; font-weight: 700; }
+  header p  { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+  main { display: flex; flex-wrap: wrap; gap: 22px; padding: 20px; align-items: flex-start; }
+
+  .board-wrap { position: relative; }
+  .board {
+    display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr);
+    width: min(78vw, 560px); height: min(78vw, 560px);
+    border: 3px solid #000; border-radius: 4px; overflow: hidden; touch-action: manipulation;
+  }
+  .sq { position: relative; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; user-select: none; cursor: pointer; }
+  .sq.light { background: var(--lightsq); } .sq.dark { background: var(--darksq); }
+  .sq .coord { position: absolute; top: 2px; left: 3px; font-size: 9px; color: rgba(0,0,0,.4); }
+  .piece {
+    width: 74%; height: 74%; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: clamp(15px, 3.4vw, 26px); box-shadow: 0 2px 4px rgba(0,0,0,.35);
+  }
+  .piece.w { background: var(--wpiece); color: #1a1410; border: 1.5px solid #9a8a72; }
+  .piece.b { background: var(--bpiece); color: #f4ead9; border: 1.5px solid #000; }
+  .sq.sel  { outline: 4px solid var(--sel); outline-offset: -4px; }
+  .sq.hint::after {
+    content: ""; position: absolute; width: 30%; height: 30%; border-radius: 50%;
+    background: var(--hint); pointer-events: none;
+  }
+  .sq.hint.cap::after { width: 84%; height: 84%; background: transparent;
+    border: 5px solid var(--hint); box-sizing: border-box; }
+  .sq.lastmove { box-shadow: inset 0 0 0 4px rgba(224,164,74,.7); }
+  .sq.check .piece { box-shadow: 0 0 0 4px #d64545, 0 2px 4px rgba(0,0,0,.35); }
+
+  .panel { width: 320px; max-width: 92vw; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 16px; }
+  .panel h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  button { background: #2c2620; color: var(--text); border: 1px solid var(--line); border-radius: 7px;
+    padding: 8px 12px; font-size: 13px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #1a130a; border-color: var(--accent); font-weight: 700; }
+  label.ctl { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 3px; }
+  input[type=range] { width: 100%; }
+  .evalbar { height: 12px; border-radius: 6px; background: linear-gradient(90deg,#d64545,#e0a44a,#6fbf5e);
+    position: relative; margin: 6px 0 2px; }
+  .evalbar .mark { position: absolute; top: -3px; width: 3px; height: 18px; background: #fff; border-radius: 2px;
+    box-shadow: 0 0 3px #000; transition: left .2s; }
+  .stat { font-size: 12px; line-height: 1.7; font-family: ui-monospace, Consolas, monospace; color: var(--muted); }
+  .stat b { color: var(--text); }
+  #result { font-size: 14px; font-weight: 700; color: var(--accent); min-height: 20px; margin-top: 6px; }
+  .moves { font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.6;
+    max-height: 180px; overflow: auto; background: #17130f; border: 1px solid var(--line); border-radius: 7px; padding: 8px; }
+  .legend { font-size: 11px; color: var(--muted); margin-top: 10px; }
+  .legend span { display: inline-block; margin-right: 10px; }
+  .warn { font-size: 11px; color: #d68a45; margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Engine MakrukThai — สนามซ้อมหมากรุกไทย</h1>
+  <p>เอนจิ้น alpha-beta แบบ Stockfish-lite สำหรับหมากรุกไทย · เลื่อนขั้นเป็นเม็ด · กติกาการนับ · Skill 0–20</p>
+</header>
+<main>
+  <div class="board-wrap">
+    <div class="board" id="board"></div>
+    <div class="warn">* ต้องเปิดผ่านเว็บเซิร์ฟเวอร์ (เช่น <code>npx serve</code>) ไม่ใช่ดับเบิลคลิกไฟล์ เพราะใช้ ES module + Web Worker</div>
+  </div>
+
+  <div class="panel">
+    <h2>ควบคุม</h2>
+    <div class="row">
+      <button class="primary" id="new">เกมใหม่</button>
+      <button id="undo">ถอนตา</button>
+      <button id="flip">พลิกกระดาน</button>
+      <button id="hint">ขอคำแนะนำ</button>
+    </div>
+    <div class="row">
+      <button id="side">คุณเล่น: ขาว</button>
+      <button id="gonow">ให้บอทเดินตอนนี้</button>
+    </div>
+
+    <label class="ctl">ระดับความเก่ง (Skill): <b id="skillVal">20</b></label>
+    <input type="range" id="skill" min="0" max="20" value="20">
+    <label class="ctl">เวลาคิดต่อตา: <b id="timeVal">1000</b> ms</label>
+    <input type="range" id="time" min="200" max="4000" step="100" value="1000">
+
+    <h2 style="margin-top:16px">สถานะ</h2>
+    <div class="evalbar"><div class="mark" id="evalMark" style="left:50%"></div></div>
+    <div class="stat" id="stat">พร้อม</div>
+    <div class="stat" id="counting"></div>
+    <div id="result"></div>
+
+    <h2 style="margin-top:16px">รายการเดิน</h2>
+    <div class="moves" id="moves"></div>
+
+    <div class="legend">
+      <span><b>K</b>=ขุน</span><span><b>M</b>=เม็ด</span><span><b>R</b>=เรือ</span>
+      <span><b>N</b>=ม้า</span><span><b>S</b>=โคน</span><span><b>P</b>=เบี้ย</span>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+const FILES = 'abcdefgh';
+const PIECE_CHAR = { p:'P', n:'N', s:'S', m:'M', r:'R', k:'K' };
+
+const boardEl   = document.getElementById('board');
+const statEl    = document.getElementById('stat');
+const countEl   = document.getElementById('counting');
+const resultEl  = document.getElementById('result');
+const movesEl   = document.getElementById('moves');
+const evalMark  = document.getElementById('evalMark');
+
+let worker, ready = false;
+let fen = 'rnsmksnr/8/pppppppp/8/8/PPPPPPPP/8/RNSKMSNR w - - 0 1';
+let board64 = [];       // [{c,t}|null] index 0=a1 .. 63=h8
+let turn = 'white';
+let humanSide = 'white';
+let flipped = false;
+let legal = [];          // ['f3f4', ...]
+let selected = -1;
+let lastMove = null;     // {from,to}
+let checkSq = -1;
+let sanList = [];
+let thinking = false;
+let gameOver = false;
+
+// ---------------- worker ----------------
+function initWorker() {
+  worker = new Worker('../worker/engine.worker.js', { type: 'module' });
+  worker.onmessage = (e) => onMsg(e.data);
+  worker.onerror = (e) => { statEl.textContent = 'Worker error: ' + e.message; };
+}
+function post(m) { worker.postMessage(m); }
+
+let pendingGo = null;   // 'engine' | 'force' | 'hint' | null
+let goSerial = 0;       // กัน bestmove ที่ค้างจากรอบก่อน
+
+function onMsg(m) {
+  switch (m.type) {
+    case 'ready':
+      ready = true;
+      post({ type: 'setoption', name: 'Skill Level', value: +document.getElementById('skill').value });
+      newGame();
+      break;
+    case 'state':
+      fen = m.fen; turn = m.turn;
+      parseFen(fen);
+      renderCounting(m.counting);
+      checkSq = m.inCheck ? findKing(turn) : -1;
+      render();
+      renderMoves();
+      handleVerdict(m.gameOver);
+      post({ type: 'legal' });
+      maybeEngineMove();
+      break;
+    case 'legal':
+      legal = m.moves;
+      render();
+      break;
+    case 'moved':
+      sanList.push(m.san || m.uci);
+      lastMove = { from: sqIndex(m.uci.slice(0,2)), to: sqIndex(m.uci.slice(2,4)) };
+      renderMoves();
+      post({ type: 'eval' });
+      break;
+    case 'info':
+      showInfo(m);
+      break;
+    case 'bestmove': {
+      thinking = false;
+      const kind = pendingGo;
+      pendingGo = null;
+      if (m.serial !== goSerial) break;            // ผลลัพธ์ค้างจากรอบก่อน -> ทิ้ง
+      if (kind === 'hint') {
+        if (m.move) {
+          selected = sqIndex(m.move.slice(0, 2));
+          render();
+          statEl.textContent = 'แนะนำ: ' + (m.san || m.move);
+        }
+      } else if (m.move && !gameOver) {
+        post({ type: 'domove', uci: m.move });     // worker จะ reply moved + state
+      } else if (!m.move) {
+        statEl.textContent = 'บอทไม่มีหมากเดิน';
+      }
+      break;
+    }
+    case 'eval':
+      setEval(m.cp);
+      break;
+    case 'error':
+      statEl.textContent = 'ผิดพลาด: ' + m.message;
+      thinking = false;
+      break;
+  }
+}
+
+// ---------------- game flow ----------------
+function newGame() {
+  sanList = []; selected = -1; lastMove = null; gameOver = false;
+  pendingGo = null; goSerial++;
+  resultEl.textContent = '';
+  post({ type: 'newgame' });
+  post({ type: 'eval' });
+}
+
+function startGo(kind) {
+  pendingGo = kind;
+  thinking = true;
+  goSerial++;
+  statEl.textContent = kind === 'hint' ? 'กำลังหาคำแนะนำ…' : 'บอทกำลังคิด…';
+  const mt = +document.getElementById('time').value;
+  post({ type: 'go', serial: goSerial, movetime: kind === 'hint' ? Math.min(900, mt) : mt });
+}
+
+function maybeEngineMove() {
+  if (gameOver || thinking || pendingGo) return;
+  if (turn !== humanSide) startGo('engine');
+}
+
+function handleVerdict(v) {
+  if (!v || !v.over) { gameOver = false; return; }
+  gameOver = true;
+  const th = {
+    checkmate: 'รุกจน', stalemate: 'อับ — เสมอ', threefold: 'ตำแหน่งซ้ำ 3 ครั้ง — เสมอ',
+    'fifty-move': '50 ตาไม่คืบหน้า — เสมอ', counting: 'ครบการนับ — เสมอ',
+    'insufficient-material': 'กำลังไม่พอ — เสมอ',
+  }[v.reason] || v.reason;
+  const who = v.winner ? (v.winner === 'white' ? 'ขาวชนะ' : 'ดำชนะ') : '';
+  resultEl.textContent = `จบเกม: ${th} ${who ? '(' + who + ')' : ''}`;
+}
+
+// ---------------- interaction ----------------
+function onSquareClick(idx) {
+  if (thinking || gameOver || turn !== humanSide) return;
+  const p = board64[idx];
+  if (selected === -1) {
+    if (p && p.c === humanSide[0]) select(idx);
+    return;
+  }
+  if (idx === selected) { selected = -1; render(); return; }
+  const uci = sqName(selected) + sqName(idx);
+  const match = legal.find((m) => m.startsWith(uci));
+  if (match) {
+    selected = -1;
+    post({ type: 'domove', uci: match });
+    statEl.textContent = 'ตาบอท';
+  } else if (p && p.c === humanSide[0]) {
+    select(idx);
+  } else {
+    selected = -1; render();
+  }
+}
+function select(idx) { selected = idx; render(); }
+
+// ---------------- rendering ----------------
+function parseFen(f) {
+  board64 = new Array(64).fill(null);
+  const rows = f.split(/\s+/)[0].split('/');
+  for (let i = 0; i < 8; i++) {
+    const rank = 7 - i; let file = 0;
+    for (const ch of rows[i]) {
+      if (ch >= '1' && ch <= '9') { file += +ch; continue; }
+      const low = ch.toLowerCase();
+      board64[rank*8+file] = { c: ch === low ? 'b' : 'w', t: PIECE_CHAR[low] };
+      file++;
+    }
+  }
+}
+function findKing(side) {
+  const want = side === 'white' ? 'w' : 'b';
+  for (let i = 0; i < 64; i++) if (board64[i] && board64[i].t === 'K' && board64[i].c === want) return i;
+  return -1;
+}
+function sqName(i) { return FILES[i&7] + ((i>>3)+1); }
+function sqIndex(s) { return (s.charCodeAt(0)-97) + (s.charCodeAt(1)-49)*8; }
+
+function render() {
+  boardEl.innerHTML = '';
+  const order = [];
+  for (let r = 7; r >= 0; r--) for (let f = 0; f < 8; f++) order.push(r*8+f);
+  const cells = flipped ? order.slice().reverse() : order;
+
+  const hintTargets = selected >= 0
+    ? legal.filter((m) => m.slice(0,2) === sqName(selected)).map((m) => sqIndex(m.slice(2,4)))
+    : [];
+
+  for (const idx of cells) {
+    const f = idx & 7, r = idx >> 3;
+    const el = document.createElement('div');
+    el.className = 'sq ' + ((f + r) % 2 === 0 ? 'dark' : 'light');
+    if (idx === selected) el.classList.add('sel');
+    if (lastMove && (idx === lastMove.from || idx === lastMove.to)) el.classList.add('lastmove');
+    if (idx === checkSq) el.classList.add('check');
+    if (hintTargets.includes(idx)) {
+      el.classList.add('hint');
+      if (board64[idx]) el.classList.add('cap');
+    }
+    if (f === (flipped ? 7 : 0)) {
+      const c = document.createElement('span'); c.className = 'coord'; c.textContent = r + 1; el.appendChild(c);
+    }
+    const p = board64[idx];
+    if (p) {
+      const pe = document.createElement('div');
+      pe.className = 'piece ' + p.c;
+      pe.textContent = p.t;
+      el.appendChild(pe);
+    }
+    el.onclick = () => onSquareClick(idx);
+    boardEl.appendChild(el);
+  }
+  statEl.dataset.turn = turn;
+}
+
+function renderMoves() {
+  let html = '';
+  for (let i = 0; i < sanList.length; i += 2) {
+    html += `<div>${(i/2+1)}. ${sanList[i] || ''} ${sanList[i+1] || ''}</div>`;
+  }
+  movesEl.innerHTML = html;
+  movesEl.scrollTop = movesEl.scrollHeight;
+}
+
+function renderCounting(c) {
+  countEl.textContent = c && c.active ? '⏱ ' + c.text : '';
+}
+
+function showInfo(m) {
+  const sc = m.scoreType === 'mate'
+    ? `#${m.mate}` : (m.score/100).toFixed(2);
+  statEl.innerHTML = `ตาเดิน: <b>${turn === 'white' ? 'ขาว' : 'ดำ'}</b> · depth <b>${m.depth}</b> · `
+    + `eval <b>${sc}</b> · ${ (m.nodes/1000|0) }k nodes · ${ (m.nps/1000|0) }k nps<br>`
+    + `<span style="font-size:11px">pv: ${(m.pv||[]).slice(0,8).join(' ')}</span>`;
+  setEval(turn === 'white' ? m.score : -m.score);
+}
+function setEval(cpWhite) {
+  const clamped = Math.max(-800, Math.min(800, cpWhite));
+  evalMark.style.left = (50 + clamped / 16) + '%';
+}
+
+// ---------------- controls ----------------
+document.getElementById('new').onclick = () => { if (ready) newGame(); };
+document.getElementById('undo').onclick = () => {
+  if (!ready || thinking) return;
+  const back = Math.min(sanList.length, turn === humanSide ? 2 : 1); // ถอนให้กลับมาถึงตาเรา
+  if (back === 0) return;
+  for (let i = 0; i < back; i++) sanList.pop();
+  gameOver = false; resultEl.textContent = '';
+  lastMove = null;
+  post({ type: 'undo', count: back });
+  post({ type: 'eval' });
+};
+document.getElementById('flip').onclick = () => { flipped = !flipped; render(); };
+document.getElementById('hint').onclick = () => {
+  if (!ready || thinking) return;
+  startGo('hint');
+};
+document.getElementById('gonow').onclick = () => {
+  if (!ready || thinking || gameOver) return;
+  startGo('force');
+};
+document.getElementById('side').onclick = () => {
+  humanSide = humanSide === 'white' ? 'black' : 'white';
+  document.getElementById('side').textContent = 'คุณเล่น: ' + (humanSide === 'white' ? 'ขาว' : 'ดำ');
+  flipped = humanSide === 'black';
+  render();
+  maybeEngineMove();
+};
+const skillR = document.getElementById('skill');
+skillR.oninput = () => {
+  document.getElementById('skillVal').textContent = skillR.value;
+  if (ready) post({ type: 'setoption', name: 'Skill Level', value: +skillR.value });
+};
+const timeR = document.getElementById('time');
+timeR.oninput = () => { document.getElementById('timeVal').textContent = timeR.value; };
+
+initWorker();
+</script>
+</body>
+</html>

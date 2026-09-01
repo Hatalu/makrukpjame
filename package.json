@@ -1,0 +1,23 @@
+{
+  "name": "engine-makruk-thai",
+  "version": "1.0.0",
+  "description": "เอนจิ้น AI หมากรุกไทย (Makruk) แบบ alpha-beta / Stockfish-lite เขียนด้วย JavaScript ล้วน ใช้ในเบราว์เซอร์ได้ทันที",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./engine": "./src/engine.js",
+    "./worker": "./worker/engine.worker.js"
+  },
+  "scripts": {
+    "test": "node test/perft.mjs && node test/rules.mjs",
+    "test:perft": "node test/perft.mjs",
+    "test:rules": "node test/rules.mjs",
+    "play": "node examples/cli.mjs",
+    "serve": "node tools/serve.mjs 4180",
+    "import-pgn": "node tools/import-pgn.mjs"
+  },
+  "keywords": ["makruk", "หมากรุกไทย", "thai-chess", "chess-engine", "alpha-beta", "ai", "godratsf"],
+  "license": "MIT",
+  "engines": { "node": ">=18" }
+}
