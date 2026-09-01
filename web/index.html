@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>สนามซ้อมหมากรุกไทย</title>
+<meta name="description" content="กระดานหมากรุกไทยเล่นกับเอนจิ้น AI ปรับระดับได้ พร้อมกฎการนับและรูปแบบเปิดหมาก">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Trirong:ital,wght@0,500;0,600;1,500&family=Sarabun:wght@400;500;600;700&display=swap">
+<style>
+  /* ============ palette : teak lacquer & brass ============ */
+  :root {
+    --ground:#e7dbc3; --surface:#f1e8d5; --surface-2:#ece0c8;
+    --ink:#2b2013; --ink-soft:#6f5d43; --line:#cdbb92;
+    --accent:#9e2b25; --accent-ink:#fff3ec;
+    --brass:#9a6f2e; --brass-bright:#b98a3c;
+    --good:#3f6b52;
+    --sq-light:#e6cb9c; --sq-dark:#9a6336;
+    --frame:#5f4022; --frame-edge:#3f2914;
+    --piece-light:#f0e2c1; --piece-light-ink:#2b2013;
+    --piece-dark:#33251a; --piece-dark-ink:#f2e3c2;
+    --shadow:rgba(48,30,14,.28);
+    --focus:#9e2b25;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#160e07; --surface:#221710; --surface-2:#2b1e14;
+      --ink:#efe2cb; --ink-soft:#b19a77; --line:#3c2b1b;
+      --accent:#dc5a4d; --accent-ink:#1a0d09;
+      --brass:#c99a4e; --brass-bright:#e0b568;
+      --good:#6fae86;
+      --sq-light:#d6bc8f; --sq-dark:#7a4b29;
+      --frame:#3c2817; --frame-edge:#1f130a;
+      --piece-light:#ecdcb9; --piece-light-ink:#241a12;
+      --piece-dark:#221812; --piece-dark-ink:#ecdcb9;
+      --shadow:rgba(0,0,0,.5);
+      --focus:#dc5a4d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#160e07; --surface:#221710; --surface-2:#2b1e14;
+    --ink:#efe2cb; --ink-soft:#b19a77; --line:#3c2b1b;
+    --accent:#dc5a4d; --accent-ink:#1a0d09;
+    --brass:#c99a4e; --brass-bright:#e0b568;
+    --good:#6fae86;
+    --sq-light:#d6bc8f; --sq-dark:#7a4b29;
+    --frame:#3c2817; --frame-edge:#1f130a;
+    --piece-light:#ecdcb9; --piece-light-ink:#241a12;
+    --piece-dark:#221812; --piece-dark-ink:#ecdcb9;
+    --shadow:rgba(0,0,0,.5);
+    --focus:#dc5a4d;
+  }
+
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:"Sarabun","Leelawadee UI","Noto Sans Thai",system-ui,sans-serif;
+    font-size:16px; line-height:1.6; letter-spacing:.005em;
+  }
+  @media (prefers-reduced-motion:reduce){ *{ animation-duration:.001ms!important; transition-duration:.001ms!important; } }
+
+  h1,h2,h3 { font-family:"Trirong","Sarabun",serif; font-weight:600; margin:0; text-wrap:balance; }
+
+  /* ============ top bar ============ */
+  .topbar {
+    display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+    padding:18px clamp(14px,4vw,40px) 14px;
+    border-bottom:1px solid var(--line);
+  }
+  .brand { font-family:"Trirong",serif; font-weight:600; font-size:clamp(20px,3.4vw,27px); color:var(--ink); }
+  .brand .dot { color:var(--accent); }
+  .kicker {
+    font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--ink-soft); font-weight:600;
+  }
+  .topbar .spacer { flex:1; }
+  .theme-btn {
+    border:1px solid var(--line); background:var(--surface); color:var(--ink-soft);
+    border-radius:999px; padding:6px 14px; font:inherit; font-size:13px; cursor:pointer;
+  }
+  .theme-btn:hover { border-color:var(--brass); color:var(--ink); }
+
+  /* ============ layout ============ */
+  .wrap {
+    display:grid; grid-template-columns:minmax(0,1fr) 340px;
+    gap:clamp(18px,3vw,40px);
+    padding:clamp(16px,3.5vw,38px) clamp(14px,4vw,40px) 48px;
+    align-items:start; max-width:1180px; margin:0 auto;
+  }
+  @media (max-width:880px){ .wrap { grid-template-columns:minmax(0,1fr); } }
+
+  /* ============ board ============ */
+  .board-stage { display:flex; gap:14px; align-items:stretch; }
+  .evalbar {
+    width:12px; flex:0 0 12px; align-self:stretch; border-radius:7px;
+    border:1px solid var(--frame-edge); overflow:hidden; position:relative;
+    background:var(--piece-dark);
+  }
+  .evalbar__white { position:absolute; left:0; right:0; bottom:0; background:linear-gradient(var(--brass-bright),var(--brass));
+    transition:height .35s cubic-bezier(.4,0,.2,1); height:50%; }
+  .evalbar__mid { position:absolute; left:0; right:0; height:2px; background:var(--accent); opacity:.7; }
+
+  .board-frame {
+    flex:1 1 auto; position:relative; padding:26px;
+    background:
+      linear-gradient(135deg,var(--frame),var(--frame-edge));
+    border-radius:8px;
+    box-shadow:0 10px 30px -8px var(--shadow), inset 0 0 0 1px rgba(0,0,0,.25);
+  }
+  .board-frame::after {
+    content:""; position:absolute; inset:8px; border-radius:4px; pointer-events:none;
+    border:1px solid var(--brass); opacity:.35;
+  }
+  .board-frame.is-thinking::before {
+    content:""; position:absolute; inset:0; border-radius:8px; pointer-events:none;
+    background:linear-gradient(115deg,transparent 40%,color-mix(in srgb,var(--brass-bright) 55%,transparent) 50%,transparent 60%);
+    background-size:280% 100%; animation:shimmer 1.5s linear infinite;
+  }
+  @keyframes shimmer { from{ background-position:120% 0; } to{ background-position:-120% 0; } }
+
+  .board {
+    display:grid; grid-template-columns:repeat(8,1fr); aspect-ratio:1;
+    width:100%; border:1px solid var(--frame-edge);
+    touch-action:manipulation;
+  }
+  .sq { position:relative; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .sq.l { background:var(--sq-light); } .sq.d { background:var(--sq-dark); }
+  .sq__co { position:absolute; font-size:10px; font-weight:600; opacity:.5; }
+  .sq__co.f { right:3px; bottom:1px; } .sq__co.r { left:3px; top:1px; }
+  .sq.sel { box-shadow:inset 0 0 0 4px var(--accent); }
+  .sq.mv::after {
+    content:""; position:absolute; width:26%; height:26%; border-radius:50%;
+    background:color-mix(in srgb,var(--good) 70%,transparent);
+  }
+  .sq.mv.cap::after { width:82%; height:82%; background:none;
+    border:5px solid color-mix(in srgb,var(--good) 60%,transparent); }
+  .sq.last { box-shadow:inset 0 0 0 4px color-mix(in srgb,var(--brass-bright) 75%,transparent); }
+  .sq.last.pulse { animation:pulse .5s ease-out; }
+  @keyframes pulse { 0%{ box-shadow:inset 0 0 0 4px var(--accent);} 100%{ box-shadow:inset 0 0 0 4px color-mix(in srgb,var(--brass-bright) 75%,transparent);} }
+  .sq.chk .piece { box-shadow:0 0 0 3px var(--accent), 0 3px 7px var(--shadow); }
+
+  .piece {
+    width:78%; height:78%; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:min(6vw,42px); line-height:1;
+    box-shadow:0 3px 7px var(--shadow), inset 0 2px 3px rgba(255,255,255,.15), inset 0 -3px 6px rgba(0,0,0,.28);
+    user-select:none;
+  }
+  .piece.w { background:radial-gradient(circle at 38% 32%,color-mix(in srgb,var(--piece-light) 88%,#fff),var(--piece-light) 62%,color-mix(in srgb,var(--piece-light) 78%,#000));
+    color:var(--piece-light-ink); }
+  .piece.b { background:radial-gradient(circle at 38% 32%,color-mix(in srgb,var(--piece-dark) 82%,#fff 18%),var(--piece-dark) 60%,color-mix(in srgb,var(--piece-dark) 70%,#000));
+    color:var(--piece-dark-ink); }
+
+  /* ============ side panel ============ */
+  .panel { display:flex; flex-direction:column; gap:16px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:15px 16px; }
+  .card h2 { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:10px; font-family:"Sarabun",sans-serif; font-weight:700; }
+
+  .turn { display:flex; align-items:center; gap:10px; font-size:15px; }
+  .turn .chip { width:16px; height:16px; border-radius:50%; border:1px solid var(--frame-edge); }
+  .turn .chip.w { background:var(--piece-light); } .turn .chip.b { background:var(--piece-dark); }
+
+  .btns { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  button.act {
+    font:inherit; font-size:13.5px; padding:9px 10px; cursor:pointer;
+    background:var(--surface-2); color:var(--ink); border:1px solid var(--line); border-radius:8px;
+  }
+  button.act:hover { border-color:var(--brass); }
+  button.act.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
+  button.act.primary:hover { filter:brightness(1.06); }
+  button.act:focus-visible, .theme-btn:focus-visible, select:focus-visible, input:focus-visible {
+    outline:2px solid var(--focus); outline-offset:2px;
+  }
+
+  .ctl { margin-top:12px; }
+  .ctl label { display:flex; justify-content:space-between; font-size:12.5px; color:var(--ink-soft); margin-bottom:4px; }
+  .ctl label b { color:var(--ink); font-variant-numeric:tabular-nums; }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+
+  .stat { font-size:13px; line-height:1.85; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+  .stat b { color:var(--ink); }
+  .stat .pv { display:block; font-size:11.5px; margin-top:2px; word-break:break-all; opacity:.85; }
+
+  .count-pill {
+    display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:999px; padding:3px 11px; color:var(--ink);
+  }
+  .count-pill.on { border-color:var(--accent); color:var(--accent); }
+
+  .result { font-family:"Trirong",serif; font-size:16px; font-weight:600; color:var(--accent); min-height:1.2em; }
+
+  .moves {
+    font-variant-numeric:tabular-nums; font-size:13px; line-height:1.75;
+    max-height:230px; overflow-y:auto; background:var(--surface-2);
+    border:1px solid var(--line); border-radius:8px; padding:8px 10px;
+  }
+  .moves .row { display:grid; grid-template-columns:28px 1fr 1fr; gap:6px; }
+  .moves .n { color:var(--ink-soft); }
+
+  /* ============ formation reference ============ */
+  .formations { margin-top:22px; grid-column:1 / -1; max-width:1180px; }
+  .formations > summary {
+    cursor:pointer; font-family:"Trirong",serif; font-size:18px; font-weight:600;
+    padding:12px 0; border-top:1px solid var(--line); list-style:none;
+  }
+  .formations > summary::-webkit-details-marker { display:none; }
+  .formations > summary::before { content:"▸ "; color:var(--accent); }
+  .formations[open] > summary::before { content:"▾ "; }
+  .fgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px; padding:6px 0 4px; }
+  .fitem { background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:11px 13px; }
+  .fitem .code { font-family:"Trirong",serif; font-weight:600; color:var(--accent); font-size:14px; }
+  .fitem .th { font-weight:600; font-size:13.5px; }
+  .fitem .desc { font-size:12px; color:var(--ink-soft); margin-top:3px; }
+
+  .legend { display:flex; flex-wrap:wrap; gap:5px 14px; font-size:12px; color:var(--ink-soft); }
+  .legend span b { color:var(--ink); font-size:15px; margin-right:2px; }
+
+  .foot { grid-column:1/-1; max-width:1180px; margin:26px auto 0; font-size:12px; color:var(--ink-soft); text-align:center; }
+  .foot a { color:var(--accent); }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">สนามซ้อม<span class="dot">หมากรุกไทย</span></span>
+  <span class="kicker">Makruk Trainer · Engine MakrukThai</span>
+  <span class="spacer"></span>
+  <button class="theme-btn" id="themeBtn" type="button">โหมดมืด/สว่าง</button>
+</header>
+
+<main class="wrap">
+  <section>
+    <div class="board-stage">
+      <div class="evalbar" title="แต้มประเมิน (ขาวได้เปรียบ = แถบทองสูงขึ้น)">
+        <div class="evalbar__white" id="evalWhite"></div>
+        <div class="evalbar__mid"></div>
+      </div>
+      <div class="board-frame" id="frame">
+        <div class="board" id="board" role="grid" aria-label="กระดานหมากรุกไทย"></div>
+      </div>
+    </div>
+    <p class="legend" style="margin-top:12px">
+      <span><b>♚</b>ขุน</span><span><b>♛</b>เม็ด</span><span><b>♜</b>เรือ</span>
+      <span><b>♞</b>ม้า</span><span><b>♝</b>โคน</span><span><b>♟</b>เบี้ย</span>
+      <span style="opacity:.7">· เบี้ยถึงแถวที่ 6 เลื่อนขั้นเป็นเม็ด</span>
+    </p>
+  </section>
+
+  <aside class="panel">
+    <div class="card">
+      <h2>สถานะ</h2>
+      <div class="turn"><span class="chip" id="turnChip"></span><span id="turnText">กำลังโหลดเอนจิ้น…</span></div>
+      <div style="margin-top:8px"><span class="count-pill" id="countPill">ยังไม่เริ่มนับ</span></div>
+      <div class="result" id="result"></div>
+    </div>
+
+    <div class="card">
+      <h2>ควบคุม</h2>
+      <div class="btns">
+        <button class="act primary" id="new" type="button">เกมใหม่</button>
+        <button class="act" id="undo" type="button">ถอนตา</button>
+        <button class="act" id="flip" type="button">พลิกกระดาน</button>
+        <button class="act" id="hint" type="button">ขอคำแนะนำ</button>
+        <button class="act" id="side" type="button">คุณเล่น: ขาว</button>
+        <button class="act" id="gonow" type="button">ให้บอทเดิน</button>
+      </div>
+      <div class="ctl">
+        <label>ระดับความเก่งของบอท <b id="skillVal">12</b></label>
+        <input type="range" id="skill" min="0" max="20" value="12" aria-label="ระดับความเก่ง">
+      </div>
+      <div class="ctl">
+        <label>เวลาคิดต่อตา <b><span id="timeVal">900</span> ms</b></label>
+        <input type="range" id="time" min="200" max="4000" step="100" value="900" aria-label="เวลาคิดต่อตา">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>สมองของบอท</h2>
+      <div class="stat" id="engineStat">รอเริ่มเกม…</div>
+    </div>
+
+    <div class="card">
+      <h2>รายการเดิน</h2>
+      <div class="moves" id="moves"></div>
+    </div>
+  </aside>
+
+  <details class="formations">
+    <summary>รูปแบบเปิดหมากสไตล์ GodratSF+ (18 แบบ)</summary>
+    <div class="fgrid" id="fgrid"></div>
+  </details>
+
+  <p class="foot">
+    เอนจิ้น alpha-beta / Stockfish-lite เขียนด้วย JavaScript ล้วน · กติกาหมากรุกไทยครบ (เลื่อนขั้นเป็นเม็ด, กฎการนับ) ·
+    ทำงานทั้งหมดในเบราว์เซอร์ ไม่ส่งข้อมูลออกที่ไหน
+  </p>
+</main>
+
+<script>
+"use strict";
+// ---------- เอนจิ้นฝังในไฟล์ ----------
+// ปกติรันใน Blob Worker (ไม่ให้หน้าเว็บค้าง) ถ้าสภาพแวดล้อมบล็อก worker
+// จะ fallback ไปรันบน main thread แทน (โปรโตคอลข้อความเหมือนกัน)
+const ENGINE_SRC = "/* ==== Engine MakrukThai — bundled ==== */\n\n/* ---- src/constants.js ---- */\n// ============================================================================\n//  Engine MakrukThai  -  constants.js\n//  ค่าคงที่พื้นฐานของเอนจิ้นหมากรุกไทย (Thai Chess / Makruk)\n//\n//  กระดาน 8x8  index 0..63   sq = rank*8 + file\n//    file 0..7  = a..h        (แนวตั้ง)\n//    rank 0..7  = 1..8        (แนวนอน, rank 0 = แถวหลังฝ่ายขาว)\n//    ฝ่ายขาวเดินขึ้น (rank เพิ่ม)   ฝ่ายดำเดินลง (rank ลด)\n// ============================================================================\n\n/** @enum {number} */\nconst WHITE = 0;\nconst BLACK = 1;\n\n// ---- ชนิดหมาก (piece type) 1..6 --------------------------------------------\nconst EMPTY  = 0;\nconst PAWN   = 1; // เบี้ย   (Bia)\nconst KNIGHT = 2; // ม้า     (Ma)\nconst KHON   = 3; // โคน     (Khon)  - เดินเฉียง 4 ทิศ + ตรงหน้า 1 (เหมือน \"เงิน\" โชกิ)\nconst MET    = 4; // เม็ด    (Met)   - เดินเฉียง 1 ช่อง (ferz)\nconst ROOK   = 5; // เรือ    (Rua)\nconst KING   = 6; // ขุน     (Khun)\n\n// รหัสหมากที่เก็บในกระดาน: ขาว = type (1..6), ดำ = type | 8 (9..14), ว่าง = 0\nconst mk = (color, type) => (type | (color << 3));\nconst pcType  = (p) => (p & 7);\nconst pcColor = (p) => (p >> 3);\n\nconst W_PAWN = mk(WHITE, PAWN),   B_PAWN = mk(BLACK, PAWN);\nconst W_KNIGHT = mk(WHITE, KNIGHT), B_KNIGHT = mk(BLACK, KNIGHT);\nconst W_KHON = mk(WHITE, KHON),   B_KHON = mk(BLACK, KHON);\nconst W_MET  = mk(WHITE, MET),    B_MET  = mk(BLACK, MET);\nconst W_ROOK = mk(WHITE, ROOK),   B_ROOK = mk(BLACK, ROOK);\nconst W_KING = mk(WHITE, KING),   B_KING = mk(BLACK, KING);\n\n// ---- ตัวอักษร FEN ----------------------------------------------------------\n//  ใช้ชุดเดียวกับ Fairy-Stockfish / Makruk-Stockfish (ซึ่ง GodratSF+ อ้างอิง)\n//    p/n/s/m/r/k = bia / ma / khon(silver) / met / rua / khun\nconst TYPE_TO_CHAR = { 1: 'p', 2: 'n', 3: 's', 4: 'm', 5: 'r', 6: 'k' };\nconst CHAR_TO_TYPE = { p: PAWN, n: KNIGHT, s: KHON, m: MET, r: ROOK, k: KING };\n/** ตัวอักษรที่ใช้ใน SAN (long/short algebraic) */\nconst TYPE_TO_SAN = { 2: 'N', 3: 'S', 4: 'M', 5: 'R', 6: 'K' };\n\n// ตำแหน่งเริ่มเกมมาตรฐาน (ขุนขาว d1, เม็ดขาว e1 / ขุนดำ e8, เม็ดดำ d8)\nconst START_FEN = 'rnsmksnr/8/pppppppp/8/8/PPPPPPPP/8/RNSKMSNR w - - 0 1';\n\n// ---- ค่าหมาก (centipawn) -------------------------------------------------\n//  เบี้ย 100 / เม็ด 190 / โคน 255 / ม้า 315 / เรือ 510\nconst PIECE_VALUE = [0, 100, 315, 255, 190, 510, 0];\n\n// น้ำหนัก game-phase (ใช้ผสม mg/eg)  เริ่มเกม = 18\nconst PHASE_W = [0, 0, 1, 1, 1, 2, 0];\nconst PHASE_MAX = 18;\n\n// ---- คะแนนพิเศษ ----------------------------------------------------------\nconst MATE   = 30000;\nconst MATE_IN_MAX = MATE - 1000; // เกินค่านี้ถือว่าเป็นคะแนนรุกจน\nconst INF    = 31000;\nconst DRAW_SCORE = 0;\nconst MAX_PLY = 128;\nconst TEMPO = 8;\n\n// ---- geometry helpers --------------------------------------------------\nconst fileOf = (sq) => (sq & 7);\nconst rankOf = (sq) => (sq >> 3);\nconst square = (f, r) => (r * 8 + f);\n/** สะท้อนช่องตามแนวนอน (ใช้แปลงมุมมองขาว<->ดำ) */\nconst flipSq = (sq) => (sq ^ 56);\n\n/** ชื่อช่องแบบ algebraic เช่น 12 -> \"e2\" */\nfunction squareName(sq) {\n  return 'abcdefgh'[fileOf(sq)] + (rankOf(sq) + 1);\n}\n/** \"e2\" -> 12  (คืน -1 ถ้าผิดรูปแบบ) */\nfunction parseSquare(str) {\n  if (!str || str.length < 2) return -1;\n  const f = str.charCodeAt(0) - 97;\n  const r = str.charCodeAt(1) - 49;\n  if (f < 0 || f > 7 || r < 0 || r > 7) return -1;\n  return r * 8 + f;\n}\n\n/** แถวที่เบี้ยเลื่อนขั้นเป็นเม็ด (rank index ที่ 6 นับจากฝั่งตัวเอง) */\nconst PROMO_RANK = [5, 2]; // [WHITE, BLACK]\n\n\n/* ---- src/zobrist.js ---- */\n// ============================================================================\n//  Engine MakrukThai  -  zobrist.js\n//  กุญแจ Zobrist ขนาด 64 บิต (เก็บเป็นสองส่วน 32 บิต: lo / hi)\n//  หมากรุกไทยไม่มี castling / en-passant จึงมีแค่ piece-square + side-to-move\n// ============================================================================\n\nfunction xorshift32(x) {\n  x ^= x << 13; x >>>= 0;\n  x ^= x >>> 17;\n  x ^= x << 5;  x >>>= 0;\n  return x >>> 0;\n}\n\nlet _seed = 0x1a2b3c4d;\nfunction rnd32() {\n  _seed = xorshift32(_seed);\n  return _seed | 0;\n}\n\n// pieceLo/pieceHi[pieceCode 0..14][sq 0..63]\nconst Z_PIECE_LO = [];\nconst Z_PIECE_HI = [];\nfor (let c = 0; c < 15; c++) {\n  Z_PIECE_LO[c] = new Int32Array(64);\n  Z_PIECE_HI[c] = new Int32Array(64);\n  for (let s = 0; s < 64; s++) {\n    Z_PIECE_LO[c][s] = rnd32();\n    Z_PIECE_HI[c][s] = rnd32();\n  }\n}\nconst Z_SIDE_LO = rnd32();\nconst Z_SIDE_HI = rnd32();\n\n\n/* ---- src/tables.js ---- */\n// ============================================================================\n//  Engine MakrukThai  -  tables.js\n//  ตารางการเดิน / การจู่โจม แบบ precompute ต่อช่อง (attack & move tables)\n// ============================================================================\n\nconst onBoard = (f, r) => f >= 0 && f < 8 && r >= 0 && r < 8;\n\n// ตารางเป้าหมายการเดินต่อช่อง\nconst KNIGHT_MOVES = new Array(64);\nconst KING_MOVES   = new Array(64);\nconst MET_MOVES    = new Array(64);                 // เฉียง 1 ช่อง (4 ทิศ)\nconst KHON_MOVES    = [new Array(64), new Array(64)]; // [color][sq]\nconst PAWN_PUSH     = [new Int8Array(64), new Int8Array(64)];\nconst PAWN_CAPS     = [new Array(64), new Array(64)];\nconst ROOK_RAYS     = new Array(64);                 // [sq] -> [4][squares...]\n\n// ตาราง \"โจมตีมาจากช่องไหน\" (ใช้ตรวจ isSquareAttacked)\nconst PAWN_ATK_FROM = [new Array(64), new Array(64)]; // [byColor][target]\nconst KHON_ATK_FROM = [new Array(64), new Array(64)]; // [byColor][target]\n\nconst KN   = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]];\nconst KG   = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];\nconst DIAG = [[1, 1], [-1, 1], [-1, -1], [1, -1]];\nconst ORTH = [[1, 0], [-1, 0], [0, 1], [0, -1]];\n\nfor (let s = 0; s < 64; s++) {\n  const f = fileOf(s), r = rankOf(s);\n  const add = (arr, nf, nr) => { if (onBoard(nf, nr)) arr.push(nr * 8 + nf); };\n\n  KNIGHT_MOVES[s] = []; for (const [df, dr] of KN) add(KNIGHT_MOVES[s], f + df, r + dr);\n  KING_MOVES[s]   = []; for (const [df, dr] of KG) add(KING_MOVES[s], f + df, r + dr);\n  MET_MOVES[s]    = []; for (const [df, dr] of DIAG) add(MET_MOVES[s], f + df, r + dr);\n\n  // โคน: เฉียง 4 ทิศ + ตรงหน้า 1 (ขาวไปเหนือ, ดำไปใต้)\n  KHON_MOVES[WHITE][s] = []; KHON_MOVES[BLACK][s] = [];\n  for (const [df, dr] of DIAG) {\n    add(KHON_MOVES[WHITE][s], f + df, r + dr);\n    add(KHON_MOVES[BLACK][s], f + df, r + dr);\n  }\n  add(KHON_MOVES[WHITE][s], f, r + 1);\n  add(KHON_MOVES[BLACK][s], f, r - 1);\n\n  // เบี้ย: เดินตรง 1, กินเฉียงหน้า\n  PAWN_PUSH[WHITE][s] = onBoard(f, r + 1) ? (r + 1) * 8 + f : -1;\n  PAWN_PUSH[BLACK][s] = onBoard(f, r - 1) ? (r - 1) * 8 + f : -1;\n  PAWN_CAPS[WHITE][s] = []; PAWN_CAPS[BLACK][s] = [];\n  add(PAWN_CAPS[WHITE][s], f - 1, r + 1); add(PAWN_CAPS[WHITE][s], f + 1, r + 1);\n  add(PAWN_CAPS[BLACK][s], f - 1, r - 1); add(PAWN_CAPS[BLACK][s], f + 1, r - 1);\n\n  // เรือ: ลำแสง 4 ทิศจนสุดกระดาน\n  ROOK_RAYS[s] = [];\n  for (const [df, dr] of ORTH) {\n    const ray = [];\n    let nf = f + df, nr = r + dr;\n    while (onBoard(nf, nr)) { ray.push(nr * 8 + nf); nf += df; nr += dr; }\n    ROOK_RAYS[s].push(ray);\n  }\n\n  // เบี้ยฝ่าย by จะจู่โจม s ได้จากช่องเฉียง \"ข้างหลัง\" ของ s\n  PAWN_ATK_FROM[WHITE][s] = []; PAWN_ATK_FROM[BLACK][s] = [];\n  add(PAWN_ATK_FROM[WHITE][s], f - 1, r - 1); add(PAWN_ATK_FROM[WHITE][s], f + 1, r - 1);\n  add(PAWN_ATK_FROM[BLACK][s], f - 1, r + 1); add(PAWN_ATK_FROM[BLACK][s], f + 1, r + 1);\n\n  // โคนฝ่าย by จู่โจม s ได้จาก: เฉียง 4 ทิศ + ช่อง \"ข้างหลังตรง\" (ขาว=ใต้, ดำ=เหนือ)\n  KHON_ATK_FROM[WHITE][s] = []; KHON_ATK_FROM[BLACK][s] = [];\n  for (const [df, dr] of DIAG) {\n    add(KHON_ATK_FROM[WHITE][s], f + df, r + dr);\n    add(KHON_ATK_FROM[BLACK][s], f + df, r + dr);\n  }\n  add(KHON_ATK_FROM[WHITE][s], f, r - 1);\n  add(KHON_ATK_FROM[BLACK][s], f, r + 1);\n}\n\n/**\n * ช่อง sq ถูกโจมตีโดยฝ่าย `by` หรือไม่\n * @param {Int8Array} bd  กระดาน\n * @param {number} sq\n * @param {number} by  WHITE | BLACK\n */\nfunction squareAttackedBy(bd, sq, by) {\n  // เบี้ย\n  const pf = PAWN_ATK_FROM[by][sq];\n  const pawnCode = mk(by, PAWN);\n  for (let i = 0; i < pf.length; i++) if (bd[pf[i]] === pawnCode) return true;\n  // ม้า\n  const nm = KNIGHT_MOVES[sq], knCode = mk(by, KNIGHT);\n  for (let i = 0; i < nm.length; i++) if (bd[nm[i]] === knCode) return true;\n  // ขุน\n  const km = KING_MOVES[sq], kCode = mk(by, KING);\n  for (let i = 0; i < km.length; i++) if (bd[km[i]] === kCode) return true;\n  // เม็ด (เฉียง 1)\n  const mm = MET_MOVES[sq], mCode = mk(by, MET);\n  for (let i = 0; i < mm.length; i++) if (bd[mm[i]] === mCode) return true;\n  // โคน\n  const sm = KHON_ATK_FROM[by][sq], sCode = mk(by, KHON);\n  for (let i = 0; i < sm.length; i++) if (bd[sm[i]] === sCode) return true;\n  // เรือ\n  const rays = ROOK_RAYS[sq], rCode = mk(by, ROOK);\n  for (let d = 0; d < 4; d++) {\n    const ray = rays[d];\n    for (let i = 0; i < ray.length; i++) {\n      const q = bd[ray[i]];\n      if (q === EMPTY) continue;\n      if (q === rCode) return true;\n      break;\n    }\n  }\n  return false;\n}\n\n\n/* ---- src/counting.js ---- */\n// ============================================================================\n//  Engine MakrukThai  -  counting.js\n//  กฎการนับ (เสมอ) ของหมากรุกไทย  -  ฉบับประยุกต์ใช้กับเอนจิ้น\n//\n//    * นับกระดาน (Board's honour) : เริ่มเมื่อ \"ไม่มีเบี้ยเหลือบนกระดาน\"\n//         เป้าหมาย 64  ถ้าไม่รุกจนก่อนถึง -> เสมอ\n//    * นับศักดิ์หมาก (Pieces' honour) : เริ่มเมื่อฝ่ายหนึ่งเหลือแต่ขุน\n//         เป้าหมายขึ้นกับกำลังที่ฝ่ายรุกเหลือ:\n//            เรือ 2      -> 8\n//            เรือ 1      -> 16\n//            โคน 2      -> 22\n//            ม้า 2       -> 32\n//            โคน 1      -> 44\n//            ม้า 1       -> 64\n//            อื่น ๆ      -> 64\n//\n//  ค่านับเริ่มจาก \"จำนวนหมากทั้งหมดบนกระดาน\" แล้วบวกทีละ 1 ทุกครึ่งตา\n//  การกินตัว หรือการเดินเบี้ย จะรีเซ็ตการนับ\n//  (ใกล้เคียงพฤติกรรม Makruk-Stockfish ที่ GodratSF+ ใช้ - \"64 move rule\")\n// ============================================================================\n\nfunction newCounting() {\n  return { active: 'none', count: 0, limit: 0, side: -1 };\n}\nfunction cloneCounting(c) {\n  return { active: c.active, count: c.count, limit: c.limit, side: c.side };\n}\n\n/** นับหมากแยกชนิดของฝ่าย `color` (ใช้เฉพาะตอนเปลี่ยนเข้าโหมดนับศักดิ์หมาก) */\nfunction tallyColor(bd, color) {\n  const t = new Int8Array(7);\n  for (let s = 0; s < 64; s++) {\n    const p = bd[s];\n    if (p !== EMPTY && pcColor(p) === color) t[pcType(p)]++;\n  }\n  return t;\n}\n\nfunction pieceLimit(atk) {\n  if (atk[ROOK] >= 2) return 8;\n  if (atk[ROOK] === 1) return 16;\n  if (atk[KHON] >= 2) return 22;\n  if (atk[KNIGHT] >= 2) return 32;\n  if (atk[KHON] >= 1) return 44;\n  if (atk[KNIGHT] >= 1) return 64;\n  return 64;\n}\n\n/**\n * อัปเดตสถานะการนับหลังเดินหมาก (เรียกจาก Board.makeMove / setFen)\n * @param {import('./board.js').Board} b\n * @param {number} movedType  ชนิดหมากที่เพิ่งเดิน (0 = ไม่ทราบ / setFen)\n * @param {number} capturedCode\n * @param {boolean} firstEval  true เมื่อเรียกจาก setFen\n */\nfunction updateCounting(b, movedType, capturedCode, firstEval) {\n  const c = b.counting;\n\n  // กินตัว หรือ เดินเบี้ย -> รีเซ็ต\n  if (!firstEval && (capturedCode !== EMPTY || movedType === PAWN)) {\n    c.active = 'none'; c.count = 0; c.limit = 0; c.side = -1;\n  }\n\n  // ใช้ตัวนับ incremental จาก Board (เร็ว ไม่ต้องสแกน 64 ช่อง)\n  const total = b.npieces;\n  const pawns = b.npawns;\n  const bareW = b.nNonKing[WHITE] === 0;\n  const bareB = b.nNonKing[BLACK] === 0;\n  const bothBare = bareW && bareB;\n\n  if (c.active === 'none') {\n    if (!bothBare && (bareW || bareB)) {\n      const atk = bareW ? BLACK : WHITE;\n      c.active = 'piece';\n      c.side = bareW ? WHITE : BLACK;\n      c.limit = pieceLimit(tallyColor(b.board, atk));\n      c.count = total;\n    } else if (pawns === 0 && !bothBare) {\n      c.active = 'board';\n      c.side = -1;\n      c.limit = 64;\n      c.count = total;\n    }\n  } else if (!firstEval) {\n    c.count++;\n    // นับกระดานอยู่ แล้วกลายเป็นเหลือขุนเปล่า -> เปลี่ยนไปนับศักดิ์หมาก\n    if (c.active === 'board' && !bothBare && (bareW || bareB)) {\n      const atk = bareW ? BLACK : WHITE;\n      c.active = 'piece';\n      c.side = bareW ? WHITE : BLACK;\n      c.limit = pieceLimit(tallyColor(b.board, atk));\n      c.count = total;\n    }\n  }\n}\n\n/** คืน 'draw' ถ้าถึงเป้าการนับแล้ว มิฉะนั้นคืน null */\nfunction countingResult(b) {\n  const c = b.counting;\n  if (c.active !== 'none' && c.count > c.limit) return 'draw';\n  return null;\n}\n\n/** ข้อความอธิบายสถานะการนับ (ใช้แสดงผลใน UI) */\nfunction describeCounting(b) {\n  const c = b.counting;\n  if (c.active === 'none') return { active: false, text: 'ยังไม่เริ่มนับ' };\n  const kind = c.active === 'board' ? 'นับกระดาน' : 'นับศักดิ์หมาก';\n  return {\n    active: true,\n    kind: c.active,\n    count: c.count,\n    limit: c.limit,\n    text: `${kind} ${c.count}/${c.limit}`,\n  };\n}\n\n\n/* ---- src/board.js ---- */\n// ============================================================================\n//  Engine MakrukThai  -  board.js\n//  โครงสร้างกระดาน + make/undo move + FEN + Zobrist + ตรวจการรุก\n// ============================================================================\n\n\n\n\nclass Board {\n  constructor(fen) {\n    /** @type {Int8Array} รหัสหมากต่อช่อง (0 = ว่าง) */\n    this.board = new Int8Array(64);\n    this.turn = WHITE;\n    this.kingSq = [-1, -1];\n    this.halfmove = 0;      // จำนวน ply ตั้งแต่กินตัว/เดินเบี้ยครั้งล่าสุด\n    this.fullmove = 1;\n    this.ply = 0;           // จำนวน ply ที่เดินมาแล้ว (นับจากตอน setFen)\n    this.keyLo = 0;\n    this.keyHi = 0;\n    this.counting = newCounting();\n    this._undo = [];        // สแต็คสำหรับ undoMove\n    this._rep = [];         // ประวัติกุญแจ {lo,hi} ต่อ ply (ใช้ตรวจเสมอ 3 ครั้ง)\n    this.setFen(fen || START_FEN);\n  }\n\n  // -------------------------------------------------------------------- FEN\n  setFen(fen) {\n    const parts = String(fen).trim().split(/\\s+/);\n    this.board.fill(EMPTY);\n    this.kingSq = [-1, -1];\n\n    const rows = parts[0].split('/');\n    for (let ri = 0; ri < 8; ri++) {\n      const rank = 7 - ri; // แถวแรกของ FEN = rank 8\n      let file = 0;\n      for (const ch of rows[ri] || '') {\n        if (ch >= '1' && ch <= '9') { file += +ch; continue; }\n        const lower = ch.toLowerCase();\n        const type = CHAR_TO_TYPE[lower];\n        if (!type) continue;\n        const color = ch === lower ? BLACK : WHITE;\n        const sq = rank * 8 + file;\n        this.board[sq] = mk(color, type);\n        if (type === KING) this.kingSq[color] = sq;\n        file++;\n      }\n    }\n\n    this.turn = (parts[1] || 'w') === 'b' ? BLACK : WHITE;\n\n    // ข้าม field castling / en-passant ถ้ามี (หมากรุกไทยเป็น '-' เสมอ)\n    let idx = 2;\n    if (parts[idx] === '-' || /^[KQkqA-Ha-h]+$/.test(parts[idx] || '') && !/^\\d/.test(parts[idx])) {\n      if (parts[idx] === '-' || /[KQkq]/.test(parts[idx])) idx++;\n    }\n    if (parts[idx] === '-' || /^[a-h][1-8]$/.test(parts[idx] || '')) idx++;\n\n    this.halfmove = parts[idx] !== undefined && /^\\d+$/.test(parts[idx]) ? +parts[idx] : 0;\n    this.fullmove = parts[idx + 1] !== undefined && /^\\d+$/.test(parts[idx + 1]) ? +parts[idx + 1] : 1;\n\n    // ตัวนับหมากแบบ incremental (ใช้เร่งกฎการนับ ไม่ต้องสแกน 64 ช่องทุกตา)\n    this.npawns = 0;\n    this.nNonKing = [0, 0];\n    this.npieces = 0;\n    for (let s = 0; s < 64; s++) {\n      const p = this.board[s];\n      if (p === EMPTY) continue;\n      this.npieces++;\n      const ty = pcType(p);\n      if (ty === PAWN) this.npawns++;\n      if (ty !== KING) this.nNonKing[pcColor(p)]++;\n    }\n\n    this.ply = 0;\n    this._undo.length = 0;\n    this._rep.length = 0;\n    this.counting = newCounting();\n    this._recomputeKey();\n    this._rep.push({ lo: this.keyLo, hi: this.keyHi });\n    // เผื่อโหลดตำแหน่งที่ควรเริ่มนับหมากทันที\n    updateCounting(this, /*movedType*/ 0, /*captured*/ EMPTY, /*firstEval*/ true);\n  }\n\n  fen() {\n    let placement = '';\n    for (let rank = 7; rank >= 0; rank--) {\n      let empty = 0;\n      for (let file = 0; file < 8; file++) {\n        const p = this.board[rank * 8 + file];\n        if (p === EMPTY) { empty++; continue; }\n        if (empty) { placement += empty; empty = 0; }\n        const ch = TYPE_TO_CHAR[pcType(p)];\n        placement += pcColor(p) === WHITE ? ch.toUpperCase() : ch;\n      }\n      if (empty) placement += empty;\n      if (rank > 0) placement += '/';\n    }\n    return `${placement} ${this.turn === WHITE ? 'w' : 'b'} - - ${this.halfmove} ${this.fullmove}`;\n  }\n\n  ascii() {\n    const S = { 1: 'เบี้ย', 2: 'ม้า', 3: 'โคน', 4: 'เม็ด', 5: 'เรือ', 6: 'ขุน' };\n    let out = '\\n  +------------------------+\\n';\n    for (let rank = 7; rank >= 0; rank--) {\n      out += `${rank + 1} |`;\n      for (let file = 0; file < 8; file++) {\n        const p = this.board[rank * 8 + file];\n        if (p === EMPTY) { out += ' . '; continue; }\n        const ch = TYPE_TO_CHAR[pcType(p)];\n        out += ' ' + (pcColor(p) === WHITE ? ch.toUpperCase() : ch) + ' ';\n      }\n      out += '|\\n';\n    }\n    out += '  +------------------------+\\n    a  b  c  d  e  f  g  h\\n';\n    out += `  ตาเดิน: ${this.turn === WHITE ? 'ขาว (W)' : 'ดำ (b)'}   FEN: ${this.fen()}\\n`;\n    return out;\n  }\n\n  // ------------------------------------------------------------- zobrist\n  _recomputeKey() {\n    let lo = 0, hi = 0;\n    for (let s = 0; s < 64; s++) {\n      const p = this.board[s];\n      if (p === EMPTY) continue;\n      lo ^= Z_PIECE_LO[p][s];\n      hi ^= Z_PIECE_HI[p][s];\n    }\n    if (this.turn === BLACK) { lo ^= Z_SIDE_LO; hi ^= Z_SIDE_HI; }\n    this.keyLo = lo | 0;\n    this.keyHi = hi | 0;\n  }\n\n  _xorPiece(code, sq) {\n    this.keyLo ^= Z_PIECE_LO[code][sq];\n    this.keyHi ^= Z_PIECE_HI[code][sq];\n  }\n\n  // ------------------------------------------------------------- make/undo\n  /** @param {{from:number,to:number,piece:number,captured:number,promotion:number}} m */\n  makeMove(m) {\n    const { from, to } = m;\n    const us = this.turn, them = us ^ 1;\n    const pc = this.board[from];\n    const cap = m.captured;\n\n    this._undo.push({\n      cap,\n      halfmove: this.halfmove,\n      keyLo: this.keyLo,\n      keyHi: this.keyHi,\n      counting: cloneCounting(this.counting),\n      promoted: m.promotion !== 0,\n      isNull: false,\n    });\n\n    this._xorPiece(pc, from);\n    if (cap !== EMPTY) this._xorPiece(cap, to);\n\n    const placed = m.promotion !== 0 ? mk(us, MET) : pc;\n    this.board[to] = placed;\n    this.board[from] = EMPTY;\n    this._xorPiece(placed, to);\n\n    if (pcType(pc) === KING) this.kingSq[us] = to;\n\n    // ปรับตัวนับ incremental\n    if (cap !== EMPTY) {\n      this.npieces--;\n      this.nNonKing[them]--;\n      if (pcType(cap) === PAWN) this.npawns--;\n    }\n    if (m.promotion !== 0) this.npawns--; // เบี้ย -> เม็ด\n\n    this.halfmove = (pcType(pc) === PAWN || cap !== EMPTY) ? 0 : this.halfmove + 1;\n\n    this.turn = them;\n    this.keyLo ^= Z_SIDE_LO; this.keyHi ^= Z_SIDE_HI;\n    if (us === BLACK) this.fullmove++;\n    this.ply++;\n\n    this._rep.push({ lo: this.keyLo, hi: this.keyHi });\n    updateCounting(this, pcType(pc), cap, false);\n  }\n\n  undoMove(m) {\n    const u = this._undo.pop();\n    const them = this.turn;\n    const us = them ^ 1;\n    this.turn = us;\n    if (us === BLACK) this.fullmove--;\n    this.ply--;\n    this._rep.pop();\n\n    const { from, to } = m;\n    const placed = this.board[to];\n    const orig = u.promoted ? mk(us, PAWN) : placed;\n    this.board[from] = orig;\n    this.board[to] = u.cap;\n    if (pcType(orig) === KING) this.kingSq[us] = from;\n\n    if (u.promoted) this.npawns++;\n    if (u.cap !== EMPTY) {\n      this.npieces++;\n      this.nNonKing[them]++;\n      if (pcType(u.cap) === PAWN) this.npawns++;\n    }\n\n    this.halfmove = u.halfmove;\n    this.keyLo = u.keyLo;\n    this.keyHi = u.keyHi;\n    this.counting = u.counting;\n  }\n\n  makeNullMove() {\n    this._undo.push({\n      halfmove: this.halfmove,\n      keyLo: this.keyLo,\n      keyHi: this.keyHi,\n      counting: cloneCounting(this.counting),\n      isNull: true,\n    });\n    this.turn ^= 1;\n    this.keyLo ^= Z_SIDE_LO; this.keyHi ^= Z_SIDE_HI;\n    this.halfmove++;\n    this.ply++;\n    this._rep.push({ lo: this.keyLo, hi: this.keyHi });\n  }\n\n  undoNullMove() {\n    const u = this._undo.pop();\n    this.turn ^= 1;\n    this.halfmove = u.halfmove;\n    this.keyLo = u.keyLo;\n    this.keyHi = u.keyHi;\n    this.counting = u.counting;\n    this.ply--;\n    this._rep.pop();\n  }\n\n  // ------------------------------------------------------------- queries\n  isSquareAttacked(sq, by) { return squareAttackedBy(this.board, sq, by); }\n\n  inCheck(side = this.turn) {\n    return squareAttackedBy(this.board, this.kingSq[side], side ^ 1);\n  }\n\n  /** ตำแหน่งปัจจุบันซ้ำกับที่ผ่านมา >= needed ครั้งหรือไม่ */\n  isRepetition(needed = 1) {\n    const lo = this.keyLo, hi = this.keyHi;\n    const len = this._rep.length;\n    const floor = Math.max(0, len - 1 - this.halfmove);\n    let count = 0;\n    for (let i = len - 3; i >= floor; i -= 2) {\n      const e = this._rep[i];\n      if (e.lo === lo && e.hi === hi) {\n        count++;\n        if (count >= needed) return true;\n      }\n    }\n    return false;\n  }\n\n  /** นับหมากแต่ละชนิดของทั้งสองฝ่าย -> Int8Array(16) index = pieceCode */\n  pieceCounts() {\n    const c = new Int8Array(16);\n    for (let s = 0; s < 64; s++) {\n      const p = this.board[s];\n      if (p !== EMPTY) c[p]++;\n    }\n    return c;\n  }\n\n  clone() {\n    const b = Object.create(Board.prototype);\n    b.board = this.board.slice();\n    b.turn = this.turn;\n    b.kingSq = this.kingSq.slice();\n    b.halfmove = this.halfmove;\n    b.fullmove = this.fullmove;\n    b.ply = this.ply;\n    b.keyLo = this.keyLo;\n    b.keyHi = this.keyHi;\n    b.counting = cloneCounting(this.counting);\n    b.npawns = this.npawns;\n    b.nNonKing = this.nNonKing.slice();\n    b.npieces = this.npieces;\n    b._undo = [];\n    b._rep = this._rep.map((e) => ({ lo: e.lo, hi: e.hi }));\n    return b;\n  }\n}\n\n\n/* ---- src/movegen.js ---- */\n// ============================================================================\n//  Engine MakrukThai  -  movegen.js\n//  การสร้างหมากเดิน (pseudo-legal + legal) ตามกติกาหมากรุกไทย\n//\n//  กติกาสำคัญ:\n//    เบี้ย  - เดินตรง 1 (ห้ามเดินทีแรก 2), กินเฉียงหน้า, ไม่มี en-passant\n//    เบี้ย  - เลื่อนขั้นเป็น \"เม็ด\" เท่านั้น เมื่อถึง rank ที่ 6 นับจากฝั่งตัวเอง\n//    เม็ด  - เฉียง 1 ช่อง\n//    โคน  - เฉียง 4 ทิศ + ตรงหน้า 1 ช่อง\n//    ม้า  - แบบหมากรุกสากล (กระโดดได้)\n//    เรือ  - แนวตรงระยะไกล\n//    ขุน  - รอบตัว 1 ช่อง, ไม่มีการ castling\n// ============================================================================\n\n\nfunction mvObj(from, to, piece, captured, promotion) {\n  return { from, to, piece, captured, promotion, score: 0 };\n}\n\nfunction genStep(bd, from, us, targets, out, capturesOnly) {\n  const pc = bd[from];\n  for (let i = 0; i < targets.length; i++) {\n    const to = targets[i];\n    const q = bd[to];\n    if (q === EMPTY) {\n      if (!capturesOnly) out.push(mvObj(from, to, pc, EMPTY, 0));\n    } else if (pcColor(q) !== us) {\n      out.push(mvObj(from, to, pc, q, 0));\n    }\n  }\n}\n\nfunction genSlider(bd, from, us, rays, out, capturesOnly) {\n  const pc = bd[from];\n  for (let d = 0; d < 4; d++) {\n    const ray = rays[d];\n    for (let i = 0; i < ray.length; i++) {\n      const to = ray[i];\n      const q = bd[to];\n      if (q === EMPTY) {\n        if (!capturesOnly) out.push(mvObj(from, to, pc, EMPTY, 0));\n        continue;\n      }\n      if (pcColor(q) !== us) out.push(mvObj(from, to, pc, q, 0));\n      break;\n    }\n  }\n}\n\nfunction genPawn(bd, from, us, out, capturesOnly) {\n  const pc = bd[from];\n  const promoRank = PROMO_RANK[us];\n\n  const push = PAWN_PUSH[us][from];\n  if (push >= 0 && bd[push] === EMPTY) {\n    const isPromo = rankOf(push) === promoRank;\n    if (!capturesOnly || isPromo) {\n      out.push(mvObj(from, push, pc, EMPTY, isPromo ? MET : 0));\n    }\n  }\n\n  const caps = PAWN_CAPS[us][from];\n  for (let i = 0; i < caps.length; i++) {\n    const to = caps[i];\n    const q = bd[to];\n    if (q !== EMPTY && pcColor(q) !== us) {\n      const isPromo = rankOf(to) === promoRank;\n      out.push(mvObj(from, to, pc, q, isPromo ? MET : 0));\n    }\n  }\n}\n\n/**\n * สร้างหมากเดินแบบ pseudo-legal (ยังไม่กรองการเปิดหน้าขุน)\n * @param {import('./board.js').Board} b\n * @param {Array} out  อาร์เรย์ปลายทาง (จะถูก push เข้าไป)\n * @param {boolean} [capturesOnly=false]  เอาเฉพาะกินตัว + เลื่อนขั้น (สำหรับ quiescence)\n */\nfunction generateMoves(b, out, capturesOnly = false) {\n  const bd = b.board;\n  const us = b.turn;\n  for (let from = 0; from < 64; from++) {\n    const pc = bd[from];\n    if (pc === EMPTY || pcColor(pc) !== us) continue;\n    switch (pcType(pc)) {\n      case PAWN:   genPawn(bd, from, us, out, capturesOnly); break;\n      case KNIGHT: genStep(bd, from, us, KNIGHT_MOVES[from], out, capturesOnly); break;\n      case KING:   genStep(bd, from, us, KING_MOVES[from], out, capturesOnly); break;\n      case MET:    genStep(bd, from, us, MET_MOVES[from], out, capturesOnly); break;\n      case KHON:   genStep(bd, from, us, KHON_MOVES[us][from], out, capturesOnly); break;\n      case ROOK:   genSlider(bd, from, us, ROOK_RAYS[from], out, capturesOnly); break;\n    }\n  }\n  return out;\n}\n\n/** true ถ้าเดิน m แล้วขุนฝ่ายตัวเองไม่ถูกรุก (ต้อง make/undo) */\nfunction moveIsLegal(b, m) {\n  const us = b.turn;\n  b.makeMove(m);\n  const ok = !squareAttackedBy(b.board, b.kingSq[us], us ^ 1);\n  b.undoMove(m);\n  return ok;\n}\n\n/** รายการหมากเดินที่ถูกกติกาจริง */\nfunction legalMoves(b) {\n  const pseudo = [];\n  generateMoves(b, pseudo);\n  const us = b.turn;\n  const res = [];\n  for (let i = 0; i < pseudo.length; i++) {\n    const m = pseudo[i];\n    b.makeMove(m);\n    if (!squareAttackedBy(b.board, b.kingSq[us], us ^ 1)) res.push(m);\n    b.undoMove(m);\n  }\n  return res;\n}\n\n/** true ถ้าเดิน m แล้วเป็นการรุกขุนฝ่ายตรงข้าม */\nfunction moveGivesCheck(b, m) {\n  b.makeMove(m);\n  const chk = squareAttackedBy(b.board, b.kingSq[b.turn], b.turn ^ 1);\n  b.undoMove(m);\n  return chk;\n}\n\n/** perft - นับจำนวนใบไม้ (ใช้ตรวจความถูกต้องของ movegen) */\nfunction perft(b, depth) {\n  if (depth === 0) return 1;\n  const moves = [];\n  generateMoves(b, moves);\n  const us = b.turn;\n  let nodes = 0;\n  for (let i = 0; i < moves.length; i++) {\n    const m = moves[i];\n    b.makeMove(m);\n    if (!squareAttackedBy(b.board, b.kingSq[us], us ^ 1)) {\n      nodes += depth === 1 ? 1 : perft(b, depth - 1);\n    }\n    b.undoMove(m);\n  }\n  return nodes;\n}\n\n/** perft แยกตามหมากเดินตาแรก (ใช้ debug) */\nfunction perftDivide(b, depth) {\n  const moves = [];\n  generateMoves(b, moves);\n  const us = b.turn;\n  const rows = [];\n  let total = 0;\n  for (const m of moves) {\n    b.makeMove(m);\n    if (!squareAttackedBy(b.board, b.kingSq[us], us ^ 1)) {\n      const n = depth <= 1 ? 1 : perft(b, depth - 1);\n      total += n;\n      rows.push([m, n]);\n    }\n    b.undoMove(m);\n  }\n  return { rows, total };\n}\n\n\n/* ---- src/notation.js ---- */\n// ============================================================================\n//  Engine MakrukThai  -  notation.js\n//  แปลงหมากเดิน <-> ข้อความ  (long algebraic / UCI-like และ SAN)\n//\n//    long algebraic : \"e3e4\", \"d4e5\", โปรโมท \"e5f6=M\" หรือ \"e5f6m\"\n//    SAN            : \"Nf3\", \"Sxe5\", \"e4\", \"exd6=M\", เติม \"+\"/\"#\"\n//    ตัวอักษรหมาก   : N=ม้า  S=โคน  M=เม็ด  R=เรือ  K=ขุน  (เบี้ยไม่มีตัวอักษร)\n// ============================================================================\n\n\n\n/** move -> \"e3e4\" (+ \"=M\" ถ้าเลื่อนขั้น) */\nfunction moveToUci(m) {\n  return squareName(m.from) + squareName(m.to) + (m.promotion ? '=M' : '');\n}\n\n/** \"e3e4\" / \"e5f6=M\" / \"e5f6m\"  ->  move object ที่ถูกกติกา (หรือ null) */\nfunction uciToMove(b, str) {\n  if (!str) return null;\n  const s = String(str).trim().replace(/[=]/g, '').toLowerCase();\n  const from = parseSquare(s.slice(0, 2));\n  const to = parseSquare(s.slice(2, 4));\n  if (from < 0 || to < 0) return null;\n  for (const m of legalMoves(b)) {\n    if (m.from === from && m.to === to) return m;\n  }\n  return null;\n}\n\n/** move -> SAN (ต้องอยู่ในตำแหน่ง b ก่อนเดิน) */\nfunction moveToSan(b, m) {\n  const t = pcType(m.piece);\n  let san;\n\n  if (t === PAWN) {\n    san = m.captured !== EMPTY\n      ? 'abcdefgh'[fileOf(m.from)] + 'x' + squareName(m.to)\n      : squareName(m.to);\n    if (m.promotion) san += '=M';\n  } else {\n    const L = TYPE_TO_SAN[t];\n    // disambiguation\n    let sameFile = false, sameRank = false, ambiguous = false;\n    for (const o of legalMoves(b)) {\n      if (o.to === m.to && o.piece === m.piece && o.from !== m.from) {\n        ambiguous = true;\n        if (fileOf(o.from) === fileOf(m.from)) sameFile = true;\n        if (rankOf(o.from) === rankOf(m.from)) sameRank = true;\n      }\n    }\n    let dis = '';\n    if (ambiguous) {\n      if (!sameFile) dis = 'abcdefgh'[fileOf(m.from)];\n      else if (!sameRank) dis = String(rankOf(m.from) + 1);\n      else dis = squareName(m.from);\n    }\n    san = L + dis + (m.captured !== EMPTY ? 'x' : '') + squareName(m.to);\n  }\n\n  // เติม +/#\n  b.makeMove(m);\n  const opp = b.turn;\n  const chk = squareAttackedBy(b.board, b.kingSq[opp], opp ^ 1);\n  let mate = false;\n  if (chk) {\n    const rep = [];\n    for (const _ of legalMoves(b)) { rep.push(_); break; }\n    mate = rep.length === 0;\n  }\n  b.undoMove(m);\n  if (mate) san += '#';\n  else if (chk) san += '+';\n  return san;\n}\n\n/** SAN -> move object (หา match จาก legal moves; ใช้ตอน import PGN) */\nfunction sanToMove(b, san) {\n  const clean = String(san).trim().replace(/[+#!?]+$/g, '').replace(/\\s+/g, '');\n  for (const m of legalMoves(b)) {\n    const s = moveToSan(b, m).replace(/[+#!?]+$/g, '');\n    if (s === clean) return m;\n  }\n  // เผื่อรูปแบบ long algebraic ปนมา\n  return uciToMove(b, clean);\n}\n\n\n/* ---- src/evaluate.js ---- */\n// ============================================================================\n//  Engine MakrukThai  -  evaluate.js\n//  ฟังก์ชันประเมินตำแหน่ง (static evaluation)  -  มุมมองฝ่ายขาวเป็นบวก\n//\n//  องค์ประกอบ:\n//    - กำลังหมาก (material)\n//    - piece-square tables (แยก middlegame / endgame ที่ตัวขุนและเบี้ย)\n//    - การเคลื่อนที่ (mobility)\n//    - โครงเบี้ย: เบี้ยซ้อน / เบี้ยโดด / เบี้ยผ่าน (สำคัญมากเพราะเลื่อนขั้นที่ rank 6)\n//    - เรือคุมแถวเปิด / เรือแถว 6-7\n//    - ความปลอดภัยของขุน (โล่ + ตัวจู่โจมรอบขุน)\n//    - คู่โคน\n//    - ปรับลดคะแนนเมื่อกำลังไม่พอรุกจน\n// ============================================================================\n\n\n// ---- piece-square tables (มุมมองขาว, index 0..63, rank0 = แถวหลังขาว) --------\nfunction buildPst() {\n  const mg = [null, [], [], [], [], [], []];\n  const eg = [null, [], [], [], [], [], []];\n  const centerDist = (sq) => Math.abs(3.5 - fileOf(sq)) + Math.abs(3.5 - rankOf(sq));\n\n  for (let s = 0; s < 64; s++) {\n    const f = fileOf(s), r = rankOf(s), cd = centerDist(s);\n\n    // เบี้ย: หนุนให้ดันขึ้น + คุมกลาง (เบี้ยจะไม่อยู่ rank 5+ เพราะเลื่อนขั้นแล้ว)\n    const pawnAdv = [0, 0, 6, 16, 34, 0, 0, 0][r];\n    const pawnFile = [-4, -2, 3, 6, 6, 3, -2, -4][f];\n    mg[PAWN][s] = pawnAdv + pawnFile;\n    eg[PAWN][s] = Math.round(pawnAdv * 1.3) + (pawnFile >> 1);\n\n    // ม้า: กลางกระดานดี ริมขอบแย่\n    const kn = Math.round(18 - 6 * cd);\n    mg[KNIGHT][s] = kn;\n    eg[KNIGHT][s] = kn;\n\n    // โคน: กลาง + ดันขึ้นเล็กน้อย\n    const kh = Math.round(10 - 4 * cd) + [0, 0, 2, 4, 4, 2, 0, 0][r];\n    mg[KHON][s] = kh;\n    eg[KHON][s] = Math.round(8 - 3 * cd);\n\n    // เม็ด: อ่อนมาก ให้ค่าน้อย\n    const me = Math.round(4 - 1.6 * cd);\n    mg[MET][s] = me;\n    eg[MET][s] = me;\n\n    // เรือ: PST เล็กน้อย + โบนัสแถว 6/7\n    let ro = [0, 2, 3, 4, 4, 3, 2, 0][f];\n    if (r === 6) ro += 14; else if (r === 5) ro += 6;\n    mg[ROOK][s] = ro;\n    eg[ROOK][s] = [0, 1, 2, 2, 2, 2, 1, 0][f];\n\n    // ขุน: กลางเกม -> อยู่แนวหลัง / ท้ายเกม -> เข้ากลาง\n    mg[KING][s] = [6, -6, -20, -32, -40, -44, -46, -48][r] + [4, 6, 2, -2, -2, 2, 6, 4][f];\n    eg[KING][s] = Math.round(24 - 6 * cd);\n  }\n  return { mg, eg };\n}\nconst { mg: PST_MG, eg: PST_EG } = buildPst();\n\nconst PASSED_BONUS = [0, 4, 12, 24, 44, 72, 0, 0]; // ตาม \"จำนวน rank ที่ดันมาแล้ว\"\n\nconst MOB_WEIGHT = { [KNIGHT]: 4, [KHON]: 4, [MET]: 3, [ROOK]: 3 };\nconst MOB_BASE   = { [KNIGHT]: 4, [KHON]: 4, [MET]: 2, [ROOK]: 6 };\n\n/**\n * ประเมินตำแหน่ง -> centipawn (บวก = ขาวได้เปรียบ)\n * @param {import('./board.js').Board} b\n */\nfunction evaluate(b) {\n  const bd = b.board;\n  let mg = 0, eg = 0, phase = 0, misc = 0;\n\n  const cnt = new Int8Array(16);\n  const pawnFiles = [new Int8Array(8), new Int8Array(8)];\n\n  for (let s = 0; s < 64; s++) {\n    const p = bd[s];\n    if (p === EMPTY) continue;\n    cnt[p]++;\n    const col = pcColor(p), ty = pcType(p);\n    const rel = col === WHITE ? s : flipSq(s);\n    const sgn = col === WHITE ? 1 : -1;\n    const v = PIECE_VALUE[ty];\n    mg += sgn * (v + PST_MG[ty][rel]);\n    eg += sgn * (v + PST_EG[ty][rel]);\n    phase += PHASE_W[ty];\n    if (ty === PAWN) pawnFiles[col][fileOf(s)]++;\n  }\n\n  // ---- คู่โคน -------------------------------------------------------------\n  if (cnt[mk(WHITE, KHON)] >= 2) misc += 14;\n  if (cnt[mk(BLACK, KHON)] >= 2) misc -= 14;\n\n  // ---- โครงเบี้ยตามแถวตั้ง: ซ้อน / โดด ---------------------------------\n  for (let f = 0; f < 8; f++) {\n    const wp = pawnFiles[WHITE][f], bp = pawnFiles[BLACK][f];\n    if (wp > 1) misc -= 10 * (wp - 1);\n    if (bp > 1) misc += 10 * (bp - 1);\n    const wIso = wp > 0 && (f === 0 || pawnFiles[WHITE][f - 1] === 0) && (f === 7 || pawnFiles[WHITE][f + 1] === 0);\n    const bIso = bp > 0 && (f === 0 || pawnFiles[BLACK][f - 1] === 0) && (f === 7 || pawnFiles[BLACK][f + 1] === 0);\n    if (wIso) misc -= 8;\n    if (bIso) misc += 8;\n  }\n\n  // ---- เบี้ยผ่าน + เรือคุมแถว ----------------------------------------\n  for (let s = 0; s < 64; s++) {\n    const p = bd[s];\n    if (p === EMPTY) continue;\n    const col = pcColor(p), ty = pcType(p);\n    const sgn = col === WHITE ? 1 : -1;\n\n    if (ty === PAWN) {\n      const f = fileOf(s), r = rankOf(s), dir = col === WHITE ? 1 : -1;\n      const oppPawn = mk(col ^ 1, PAWN);\n      let passed = true;\n      for (let df = -1; df <= 1 && passed; df++) {\n        const nf = f + df;\n        if (nf < 0 || nf > 7) continue;\n        for (let rr = r + dir; rr >= 0 && rr < 8; rr += dir) {\n          if (bd[rr * 8 + nf] === oppPawn) { passed = false; break; }\n        }\n      }\n      if (passed) {\n        const adv = col === WHITE ? r : 7 - r;\n        misc += sgn * (PASSED_BONUS[adv] || 0);\n      }\n    } else if (ty === ROOK) {\n      const f = fileOf(s);\n      const own = pawnFiles[col][f], opp = pawnFiles[col ^ 1][f];\n      if (own === 0 && opp === 0) misc += sgn * 16;\n      else if (own === 0) misc += sgn * 8;\n      const rr = col === WHITE ? rankOf(s) : 7 - rankOf(s);\n      if (rr === 5 || rr === 6) misc += sgn * 12;\n    }\n  }\n\n  // ---- mobility + king safety --------------------------------------\n  misc += mobilityAndKing(b, bd);\n\n  // ---- ผสม mg/eg ตาม phase ---------------------------------------------\n  if (phase > PHASE_MAX) phase = PHASE_MAX;\n  let score = ((mg + misc) * phase + (eg + misc) * (PHASE_MAX - phase)) / PHASE_MAX;\n\n  score = scaleForMaterial(score, cnt);\n  score += b.turn === WHITE ? TEMPO : -TEMPO;\n  return Math.round(score);\n}\n\nfunction mobilityAndKing(b, bd) {\n  let s = 0;\n\n  for (let sq = 0; sq < 64; sq++) {\n    const p = bd[sq];\n    if (p === EMPTY) continue;\n    const col = pcColor(p), ty = pcType(p);\n    const sgn = col === WHITE ? 1 : -1;\n    let mob = 0;\n\n    if (ty === KNIGHT) {\n      const T = KNIGHT_MOVES[sq];\n      for (let i = 0; i < T.length; i++) { const q = bd[T[i]]; if (q === EMPTY || pcColor(q) !== col) mob++; }\n      s += sgn * MOB_WEIGHT[KNIGHT] * (mob - MOB_BASE[KNIGHT]);\n    } else if (ty === KHON) {\n      const T = KHON_MOVES[col][sq];\n      for (let i = 0; i < T.length; i++) { const q = bd[T[i]]; if (q === EMPTY || pcColor(q) !== col) mob++; }\n      s += sgn * MOB_WEIGHT[KHON] * (mob - MOB_BASE[KHON]);\n    } else if (ty === MET) {\n      const T = MET_MOVES[sq];\n      for (let i = 0; i < T.length; i++) { const q = bd[T[i]]; if (q === EMPTY || pcColor(q) !== col) mob++; }\n      s += sgn * MOB_WEIGHT[MET] * (mob - MOB_BASE[MET]);\n    } else if (ty === ROOK) {\n      const rays = ROOK_RAYS[sq];\n      for (let d = 0; d < 4; d++) {\n        const ray = rays[d];\n        for (let i = 0; i < ray.length; i++) {\n          const q = bd[ray[i]];\n          if (q === EMPTY) { mob++; continue; }\n          if (pcColor(q) !== col) mob++;\n          break;\n        }\n      }\n      s += sgn * MOB_WEIGHT[ROOK] * (mob - MOB_BASE[ROOK]);\n    }\n  }\n\n  // ความปลอดภัยของขุนทั้งสองฝ่าย\n  for (const col of [WHITE, BLACK]) {\n    const ksq = b.kingSq[col];\n    if (ksq < 0) continue;\n    const sgn = col === WHITE ? 1 : -1;\n    const opp = col ^ 1;\n    const dir = col === WHITE ? 8 : -8;\n    const f = fileOf(ksq);\n    let safety = 0;\n\n    // โล่ด้านหน้าขุน 3 ช่อง\n    for (let df = -1; df <= 1; df++) {\n      const nf = f + df;\n      if (nf < 0 || nf > 7) continue;\n      const t = ksq + dir + df;\n      if (t < 0 || t > 63) { safety -= 5; continue; }\n      const q = bd[t];\n      if (q !== EMPTY && pcColor(q) === col &&\n          (pcType(q) === PAWN || pcType(q) === KHON || pcType(q) === MET)) safety += 8;\n      else safety -= 6;\n    }\n\n    // เรือคู่แข่งจ่อแถวเดียวกับขุน และไม่มีเบี้ยเราขวาง\n    let ownPawnOnFile = false, enemyRookOnFile = false;\n    for (let r = 0; r < 8; r++) {\n      const q = bd[r * 8 + f];\n      if (q === EMPTY) continue;\n      if (q === mk(col, PAWN)) ownPawnOnFile = true;\n      if (q === mk(opp, ROOK)) enemyRookOnFile = true;\n    }\n    if (enemyRookOnFile && !ownPawnOnFile) safety -= 18;\n\n    // จำนวนช่องรอบขุนที่ถูกจู่โจม\n    let atk = 0;\n    const around = KING_MOVES[ksq];\n    for (let i = 0; i < around.length; i++) {\n      if (squareAttackedBy(bd, around[i], opp)) atk++;\n    }\n    safety -= atk * atk * 2;\n\n    s += sgn * safety;\n  }\n\n  return s;\n}\n\nfunction scaleForMaterial(score, cnt) {\n  const wMinor = cnt[mk(WHITE, KNIGHT)] + cnt[mk(WHITE, KHON)] + cnt[mk(WHITE, MET)];\n  const bMinor = cnt[mk(BLACK, KNIGHT)] + cnt[mk(BLACK, KHON)] + cnt[mk(BLACK, MET)];\n  const wR = cnt[mk(WHITE, ROOK)], bR = cnt[mk(BLACK, ROOK)];\n  const wP = cnt[mk(WHITE, PAWN)], bP = cnt[mk(BLACK, PAWN)];\n\n  // ฝ่ายที่ \"นำ\" แต่กำลังไม่พอบังคับรุกจน -> ลดคะแนนให้ใกล้เสมอ\n  if (score > 0 && wP === 0 && wR === 0 && wMinor <= 1) return score * 0.25;\n  if (score < 0 && bP === 0 && bR === 0 && bMinor <= 1) return score * 0.25;\n  return score;\n}\n\n/**\n * true ถ้ากำลังทั้งกระดานไม่พอบังคับรุกจนได้ (ถือเป็นเสมอ)\n *   - ไม่มีเบี้ยและไม่มีเรือทั้งกระดาน และ\n *   - ทั้งสองฝ่ายมีกำลัง \"อ่อน\" = ตัวเดิน (ม้า+โคน+เม็ด) รวม <= 1\n *     หรือมีแค่ม้า 2 ตัว (บังคับรุกจนไม่ได้)\n */\nfunction insufficientMaterial(b) {\n  const cnt = b.pieceCounts();\n  if (cnt[mk(WHITE, PAWN)] + cnt[mk(BLACK, PAWN)] +\n      cnt[mk(WHITE, ROOK)] + cnt[mk(BLACK, ROOK)] > 0) return false;\n\n  const weak = (n, s, m) => (n + s + m) <= 1 || (n === 2 && s === 0 && m === 0);\n  const wWeak = weak(cnt[mk(WHITE, KNIGHT)], cnt[mk(WHITE, KHON)], cnt[mk(WHITE, MET)]);\n  const bWeak = weak(cnt[mk(BLACK, KNIGHT)], cnt[mk(BLACK, KHON)], cnt[mk(BLACK, MET)]);\n  return wWeak && bWeak;\n}\n\n\n/* ---- src/search.js ---- */\n// ============================================================================\n//  Engine MakrukThai  -  search.js\n//  การค้นหา alpha-beta แบบ Stockfish-lite:\n//    iterative deepening + aspiration window + PVS\n//    transposition table (64-bit key, สอง 32-bit)\n//    null-move pruning, late move reductions, reverse futility\n//    quiescence search (กินตัว + เลื่อนขั้น) + delta pruning\n//    move ordering: TT move / MVV-LVA / killers / history\n//    รองรับระดับความเก่ง (Skill Level 0..20) สำหรับเว็บฝึกซ้อม\n// ============================================================================\n\n\n\n\n\nconst now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());\n\nconst FLAG_NONE = 0, FLAG_EXACT = 1, FLAG_LOWER = 2, FLAG_UPPER = 3;\n\nconst packMove = (m) => (m.from | (m.to << 6) | ((m.promotion ? 1 : 0) << 12));\n\nclass Search {\n  constructor(hashMb = 16) {\n    this.skill = 20;\n    this.contempt = 0;\n    this.history = new Int32Array(15 * 64);\n    this.killers = new Int32Array(MAX_PLY * 2);\n    this._pv = [];\n    this.resize(hashMb);\n    this._rng = 0x2545f491 >>> 0;\n  }\n\n  // -------------------------------------------------------- transposition\n  resize(mb) {\n    const bytesPerEntry = 16;\n    let entries = Math.max(1 << 12, Math.floor((mb * 1024 * 1024) / bytesPerEntry));\n    let pow = 1;\n    while (pow * 2 <= entries) pow *= 2;\n    this.ttSize = pow;\n    this.ttMask = pow - 1;\n    this.ttKey = new Int32Array(pow);     // lock = keyHi\n    this.ttMove = new Int32Array(pow);\n    this.ttScore = new Int32Array(pow);\n    this.ttDepth = new Int8Array(pow);\n    this.ttFlag = new Uint8Array(pow);\n    this.ttGen = new Uint8Array(pow);\n    this.generation = 0;\n  }\n  clearTT() {\n    this.ttKey.fill(0); this.ttMove.fill(0); this.ttScore.fill(0);\n    this.ttDepth.fill(0); this.ttFlag.fill(0); this.ttGen.fill(0);\n  }\n\n  _rand() {\n    // xorshift32\n    let x = this._rng;\n    x ^= x << 13; x >>>= 0;\n    x ^= x >>> 17;\n    x ^= x << 5; x >>>= 0;\n    this._rng = x;\n    return x / 4294967296;\n  }\n\n  // -------------------------------------------------------------- driver\n  /**\n   * @param {import('./board.js').Board} board\n   * @param {{movetime?:number, depth?:number, nodes?:number}} limits\n   * @param {(info:object)=>void} [onInfo]\n   */\n  think(board, limits = {}, onInfo) {\n    this.board = board;\n    this.nodes = 0;\n    this.stopped = false;\n    this.startTime = now();\n    this.deadline = limits.movetime ? this.startTime + limits.movetime : Infinity;\n    this.nodeLimit = limits.nodes || Infinity;\n    this.history.fill(0);\n    this.killers.fill(0);\n    this.generation = (this.generation + 1) & 0xff;\n    this.rootScores = [];\n\n    const rootMoves = this._legalRoot();\n    if (rootMoves.length === 0) {\n      return { bestMove: null, move: null, score: 0, depth: 0, pv: [], nodes: 0, nps: 0 };\n    }\n\n    const skillMaxDepth = this.skill >= 20 ? 99 : Math.max(2, this.skill + 2);\n    const maxDepth = Math.min(limits.depth || 64, skillMaxDepth, MAX_PLY - 2);\n    const totalTime = this.deadline === Infinity ? Infinity : this.deadline - this.startTime;\n\n    let best = rootMoves[0];\n    let bestScore = 0;\n    let completedDepth = 0;\n    let lastPv = [best];\n    let prevIterTime = 0;\n\n    for (let d = 1; d <= maxDepth; d++) {\n      const iterStart = now();\n      this.rootBest = null;\n      this.rootScores = [];\n      let score;\n\n      if (d >= 4 && Math.abs(bestScore) < MATE_IN_MAX) {\n        let window = 24;\n        let a = bestScore - window, bta = bestScore + window;\n        for (;;) {\n          score = this._search(a, bta, d, 0, true);\n          if (this.stopped) break;\n          if (score <= a) { window *= 2; a = bestScore - window; if (window > 700) a = -INF; }\n          else if (score >= bta) { window *= 2; bta = bestScore + window; if (window > 700) bta = INF; }\n          else break;\n        }\n      } else {\n        score = this._search(-INF, INF, d, 0, true);\n      }\n\n      if (this.stopped && d > 1) break;\n\n      if (this.rootBest) { best = this.rootBest; bestScore = score; }\n      completedDepth = d;\n      lastPv = this._extractPv(best, d);\n\n      if (onInfo) {\n        const t = now() - this.startTime;\n        onInfo({\n          depth: d,\n          score: bestScore,\n          scoreType: Math.abs(bestScore) >= MATE_IN_MAX ? 'mate' : 'cp',\n          mate: Math.abs(bestScore) >= MATE_IN_MAX\n            ? Math.sign(bestScore) * Math.ceil((MATE - Math.abs(bestScore)) / 2)\n            : undefined,\n          nodes: this.nodes,\n          time: Math.round(t),\n          nps: t > 0 ? Math.round((this.nodes / t) * 1000) : 0,\n          pv: lastPv.map((m) => require_uci(m)),\n        });\n      }\n\n      if (Math.abs(bestScore) >= MATE_IN_MAX) break;\n\n      // คาดการณ์เวลาของ iteration ถัดไป (~2.2x ของรอบนี้) ถ้าไม่น่าจบทันก็หยุด\n      if (totalTime !== Infinity && d >= 4) {\n        const elapsed = now() - this.startTime;\n        const thisIter = now() - iterStart;\n        const predictNext = Math.max(thisIter, prevIterTime) * 2.2;\n        if (elapsed + predictNext > totalTime) break;\n      }\n      prevIterTime = now() - iterStart;\n    }\n\n    let chosen = best;\n    if (this.skill < 20) chosen = this._applySkill(best, bestScore) || best;\n\n    const t = now() - this.startTime;\n    return {\n      bestMove: require_uci(chosen),\n      move: chosen,\n      score: bestScore,\n      depth: completedDepth,\n      pv: lastPv.map((m) => require_uci(m)),\n      nodes: this.nodes,\n      nps: t > 0 ? Math.round((this.nodes / t) * 1000) : 0,\n    };\n  }\n\n  _legalRoot() {\n    const b = this.board;\n    const pseudo = [];\n    generateMoves(b, pseudo);\n    const us = b.turn;\n    const out = [];\n    for (const m of pseudo) {\n      b.makeMove(m);\n      if (!squareAttackedBy(b.board, b.kingSq[us], us ^ 1)) out.push(m);\n      b.undoMove(m);\n    }\n    return out;\n  }\n\n  _checkTime() {\n    if (this.nodes >= this.nodeLimit || now() >= this.deadline) this.stopped = true;\n  }\n\n  _stmEval() {\n    const e = evaluate(this.board);\n    return this.board.turn === WHITE ? e : -e;\n  }\n\n  _hasNonKingPawnMaterial(side) {\n    const bd = this.board.board;\n    for (let s = 0; s < 64; s++) {\n      const p = bd[s];\n      if (p === EMPTY || pcColor(p) !== side) continue;\n      const t = pcType(p);\n      if (t === KNIGHT || t === KHON || t === MET || t === ROOK) return true;\n    }\n    return false;\n  }\n\n  _drawScore() {\n    // contempt เล็กน้อย: ฝ่ายเดินไม่ชอบเสมอ\n    return DRAW_SCORE - (this.board.turn === WHITE ? this.contempt : -this.contempt);\n  }\n\n  // ----------------------------------------------------------- alpha-beta\n  _search(alpha, beta, depth, ply, isPvRoot) {\n    const b = this.board;\n    this.nodes++;\n    if ((this.nodes & 2047) === 0) this._checkTime();\n    if (this.stopped) return 0;\n    if (ply >= MAX_PLY - 2) return this._stmEval();\n\n    const pvNode = beta - alpha > 1;\n\n    if (ply > 0) {\n      if (b.isRepetition(1) || b.halfmove >= 100 ||\n          countingResult(b) === 'draw' || insufficientMaterial(b)) {\n        return this._drawScore();\n      }\n      // mate distance pruning\n      if (alpha < -MATE + ply) alpha = -MATE + ply;\n      if (beta > MATE - ply - 1) beta = MATE - ply - 1;\n      if (alpha >= beta) return alpha;\n    }\n\n    const inChk = b.inCheck();\n    if (depth <= 0 && !inChk) return this._quiesce(alpha, beta, ply);\n    if (depth < 0) depth = 0;\n\n    // ---- TT probe ----\n    const idx = (b.keyLo >>> 0) & this.ttMask;\n    const lock = b.keyHi | 0;\n    let ttMove = 0;\n    if (this.ttFlag[idx] !== FLAG_NONE && this.ttKey[idx] === lock) {\n      ttMove = this.ttMove[idx];\n      if (!pvNode && this.ttDepth[idx] >= depth) {\n        let s = this.ttScore[idx];\n        if (s >= MATE_IN_MAX) s -= ply;\n        else if (s <= -MATE_IN_MAX) s += ply;\n        const f = this.ttFlag[idx];\n        if (f === FLAG_EXACT) return s;\n        if (f === FLAG_LOWER && s >= beta) return s;\n        if (f === FLAG_UPPER && s <= alpha) return s;\n      }\n    }\n\n    const staticEval = inChk ? -INF : this._stmEval();\n\n    // ---- reverse futility / static null ----\n    if (!pvNode && !inChk && depth <= 6 &&\n        staticEval - 78 * depth >= beta && Math.abs(beta) < MATE_IN_MAX) {\n      return staticEval;\n    }\n\n    // ---- null-move pruning ----\n    if (!pvNode && !inChk && depth >= 3 &&\n        staticEval >= beta && Math.abs(beta) < MATE_IN_MAX &&\n        this._hasNonKingPawnMaterial(b.turn)) {\n      const R = 2 + ((depth / 4) | 0);\n      b.makeNullMove();\n      const s = -this._search(-beta, -beta + 1, depth - 1 - R, ply + 1, false);\n      b.undoNullMove();\n      if (this.stopped) return 0;\n      if (s >= beta) return s >= MATE_IN_MAX ? beta : s;\n    }\n\n    // ---- generate & order ----\n    const moves = [];\n    generateMoves(b, moves);\n    this._order(moves, ttMove, ply);\n\n    const us = b.turn;\n    let bestScore = -INF;\n    let bestMove = 0;\n    let flag = FLAG_UPPER;\n    let legal = 0;\n    const rootFull = ply === 0 && this.skill < 20;\n\n    for (let i = 0; i < moves.length; i++) {\n      const m = moves[i];\n      b.makeMove(m);\n      if (squareAttackedBy(b.board, b.kingSq[us], us ^ 1)) { b.undoMove(m); continue; }\n      legal++;\n\n      const gcheck = squareAttackedBy(b.board, b.kingSq[b.turn], b.turn ^ 1);\n      const isCap = m.captured !== EMPTY;\n      const isProm = m.promotion !== 0;\n      const ext = gcheck ? 1 : 0;\n      const newDepth = depth - 1 + ext;\n\n      let s;\n      if (legal === 1 || rootFull) {\n        s = -this._search(-beta, -alpha, newDepth, ply + 1, false);\n      } else {\n        let red = 0;\n        if (depth >= 3 && legal > 3 && !isCap && !isProm && !gcheck && !inChk) {\n          red = 1 + ((depth > 6 && legal > 6) ? 1 : 0);\n        }\n        s = -this._search(-alpha - 1, -alpha, newDepth - red, ply + 1, false);\n        if (s > alpha && (red > 0 || (pvNode && s < beta))) {\n          s = -this._search(-beta, -alpha, newDepth, ply + 1, false);\n        }\n      }\n\n      b.undoMove(m);\n      if (this.stopped) return 0;\n\n      if (ply === 0) this.rootScores.push({ move: m, score: s });\n\n      if (s > bestScore) {\n        bestScore = s;\n        bestMove = packMove(m);\n        if (s > alpha) {\n          alpha = s;\n          flag = FLAG_EXACT;\n          if (ply === 0) { this.rootBest = m; this.rootBestScore = s; }\n          if (s >= beta) {\n            flag = FLAG_LOWER;\n            if (!isCap && !isProm) {\n              this._addKiller(ply, m);\n              this.history[(m.piece << 6) + m.to] += depth * depth;\n            }\n            break;\n          }\n        }\n      }\n    }\n\n    if (legal === 0) {\n      // รุกจน = แพ้  /  อับ (stalemate) = เสมอ  (กติกาหมากรุกไทย)\n      return inChk ? -MATE + ply : this._drawScore();\n    }\n\n    // ---- TT store ----\n    let store = bestScore;\n    if (store >= MATE_IN_MAX) store += ply;\n    else if (store <= -MATE_IN_MAX) store -= ply;\n    const replace = this.ttFlag[idx] === FLAG_NONE ||\n      this.ttGen[idx] !== this.generation ||\n      depth >= this.ttDepth[idx];\n    if (replace) {\n      this.ttKey[idx] = lock;\n      this.ttMove[idx] = bestMove || ttMove;\n      this.ttScore[idx] = store;\n      this.ttDepth[idx] = depth;\n      this.ttFlag[idx] = flag;\n      this.ttGen[idx] = this.generation;\n    }\n\n    return bestScore;\n  }\n\n  // ----------------------------------------------------------- quiescence\n  _quiesce(alpha, beta, ply) {\n    const b = this.board;\n    this.nodes++;\n    if ((this.nodes & 2047) === 0) this._checkTime();\n    if (this.stopped) return 0;\n    if (ply >= MAX_PLY - 1) return this._stmEval();\n\n    const inChk = b.inCheck();\n    let best;\n    if (inChk) {\n      best = -INF;\n    } else {\n      best = this._stmEval();\n      if (best >= beta) return best;\n      if (best > alpha) alpha = best;\n    }\n\n    const moves = [];\n    generateMoves(b, moves, !inChk); // ถ้าถูกรุก -> สร้างทุกตาหนีรุก\n    this._order(moves, 0, ply);\n\n    const us = b.turn;\n    let anyLegal = false;\n\n    for (let i = 0; i < moves.length; i++) {\n      const m = moves[i];\n\n      if (!inChk) {\n        // delta pruning\n        const gain = m.captured !== EMPTY ? PIECE_VALUE[pcType(m.captured)] : 0;\n        const promoGain = m.promotion ? PIECE_VALUE[MET] - PIECE_VALUE[PAWN] : 0;\n        if (best + gain + promoGain + 90 < alpha) continue;\n      }\n\n      b.makeMove(m);\n      if (squareAttackedBy(b.board, b.kingSq[us], us ^ 1)) { b.undoMove(m); continue; }\n      anyLegal = true;\n      const s = -this._quiesce(-beta, -alpha, ply + 1);\n      b.undoMove(m);\n      if (this.stopped) return 0;\n\n      if (s > best) {\n        best = s;\n        if (s > alpha) {\n          alpha = s;\n          if (s >= beta) return s;\n        }\n      }\n    }\n\n    if (inChk && !anyLegal) return -MATE + ply;\n    return best;\n  }\n\n  // ------------------------------------------------------------- ordering\n  _order(moves, ttMove, ply) {\n    const k0 = this.killers[ply * 2], k1 = this.killers[ply * 2 + 1];\n    for (let i = 0; i < moves.length; i++) {\n      const m = moves[i];\n      const pm = packMove(m);\n      let sc;\n      if (pm === ttMove) sc = 2_000_000;\n      else if (m.captured !== EMPTY) {\n        sc = 1_000_000 + 16 * PIECE_VALUE[pcType(m.captured)] - PIECE_VALUE[pcType(m.piece)];\n        if (m.promotion) sc += 300_000;\n      } else if (m.promotion) sc = 900_000;\n      else if (pm === k0) sc = 800_000;\n      else if (pm === k1) sc = 790_000;\n      else sc = this.history[(m.piece << 6) + m.to] | 0;\n      m.score = sc;\n    }\n    moves.sort((a, c) => c.score - a.score);\n  }\n\n  _addKiller(ply, m) {\n    const pm = packMove(m);\n    const i = ply * 2;\n    if (this.killers[i] !== pm) {\n      this.killers[i + 1] = this.killers[i];\n      this.killers[i] = pm;\n    }\n  }\n\n  // -------------------------------------------------------------- PV / skill\n  _extractPv(firstMove, maxLen) {\n    const b = this.board;\n    const pv = [];\n    const applied = [];\n    const seen = new Set();\n    let cur = firstMove;\n\n    for (let d = 0; d < maxLen + 2 && cur; d++) {\n      // ตรวจว่า cur ถูกกติกาในตำแหน่งนี้\n      const legal = [];\n      generateMoves(b, legal);\n      let ok = null;\n      for (const mm of legal) {\n        if (mm.from === cur.from && mm.to === cur.to && (!!mm.promotion === !!cur.promotion)) { ok = mm; break; }\n      }\n      if (!ok) break;\n      const us = b.turn;\n      b.makeMove(ok);\n      if (squareAttackedBy(b.board, b.kingSq[us], us ^ 1)) { b.undoMove(ok); break; }\n      pv.push(ok);\n      applied.push(ok);\n      const key = (b.keyLo >>> 0) + ':' + (b.keyHi >>> 0);\n      if (seen.has(key)) break;\n      seen.add(key);\n\n      const idx = (b.keyLo >>> 0) & this.ttMask;\n      if (this.ttFlag[idx] === FLAG_NONE || this.ttKey[idx] !== (b.keyHi | 0)) { cur = null; }\n      else {\n        const pk = this.ttMove[idx];\n        if (!pk) { cur = null; }\n        else cur = { from: pk & 63, to: (pk >> 6) & 63, promotion: (pk >> 12) & 1 ? MET : 0 };\n      }\n    }\n\n    for (let i = applied.length - 1; i >= 0; i--) b.undoMove(applied[i]);\n    return pv.length ? pv : (firstMove ? [firstMove] : []);\n  }\n\n  _applySkill(best, bestScore) {\n    if (!this.rootScores || this.rootScores.length <= 1) return best;\n    let top = -INF;\n    for (const r of this.rootScores) if (r.score > top) top = r.score;\n    const margin = (20 - this.skill) * 12 + 12;\n    const pool = this.rootScores.filter((r) => r.score >= top - margin);\n    if (pool.length <= 1) return best;\n    const temp = 45 + (20 - this.skill) * 10;\n    const weights = pool.map((r) => Math.exp((r.score - top) / temp));\n    const sum = weights.reduce((a, c) => a + c, 0);\n    let pick = this._rand() * sum;\n    for (let i = 0; i < pool.length; i++) {\n      pick -= weights[i];\n      if (pick <= 0) return pool[i].move;\n    }\n    return pool[pool.length - 1].move;\n  }\n}\n\n// helper แยกไว้ท้ายไฟล์เพื่อเลี่ยง import วนกับ notation.js\nfunction require_uci(m) {\n  if (!m) return null;\n  const a = 'abcdefgh'[m.from & 7] + ((m.from >> 3) + 1);\n  const b = 'abcdefgh'[m.to & 7] + ((m.to >> 3) + 1);\n  return a + b + (m.promotion ? '=M' : '');\n}\n\n\n/* ---- src/book.js ---- */\n// ============================================================================\n//  Engine MakrukThai  -  book.js\n//  ตำราเปิดหมาก (opening book)  -  เก็บเป็น map: zobristKey -> [{uci, weight}]\n//\n//  ใช้ร่วมกับ GodratSF+ ได้: นำไฟล์ .pgn ที่เอนจิ้นนั้นเล่นไว้มา import ผ่าน\n//  tools/import-pgn.mjs แล้วโหลด JSON ที่ได้เข้ามาที่นี่ หรือกำหนด \"รูปแบบเปิดหมาก\"\n//  จาก data/formations.js\n// ============================================================================\n\nclass OpeningBook {\n  constructor() {\n    /** @type {Map<string, Array<{uci:string, weight:number}>>} */\n    this.map = new Map();\n  }\n\n  static key(board) {\n    return (board.keyLo >>> 0) + ':' + (board.keyHi >>> 0);\n  }\n\n  /** สร้างจาก plain object { \"lo:hi\": [{uci,weight}], ... } */\n  static fromJSON(obj) {\n    const b = new OpeningBook();\n    for (const k of Object.keys(obj || {})) b.map.set(k, obj[k]);\n    return b;\n  }\n\n  toJSON() {\n    const o = {};\n    for (const [k, v] of this.map) o[k] = v;\n    return o;\n  }\n\n  get size() { return this.map.size; }\n\n  addEntry(board, uci, weight = 1) {\n    const k = OpeningBook.key(board);\n    let arr = this.map.get(k);\n    if (!arr) { arr = []; this.map.set(k, arr); }\n    const found = arr.find((e) => e.uci === uci);\n    if (found) found.weight += weight;\n    else arr.push({ uci, weight });\n  }\n\n  /**\n   * สร้าง book จากรายการ \"แนวเปิด\" (แต่ละแนวคือ array ของ uci moves)\n   * @param {Board} startBoard  ตำแหน่งเริ่ม (จะถูก clone)\n   * @param {string[][]} lines\n   * @param {number} maxPly\n   */\n  static fromLines(startBoard, lines, maxPly = 20) {\n    const book = new OpeningBook();\n    for (const line of lines) {\n      const b = startBoard.clone();\n      for (let i = 0; i < line.length && i < maxPly; i++) {\n        const mv = uciToMove(b, line[i]);\n        if (!mv) break;\n        book.addEntry(b, line[i], 1);\n        b.makeMove(mv);\n      }\n    }\n    return book;\n  }\n\n  /**\n   * เลือกหมากจาก book สำหรับตำแหน่งปัจจุบัน\n   * @param {Board} board\n   * @param {'weighted'|'best'|'random'} mode\n   * @returns {object|null} move object หรือ null ถ้าไม่มีในตำรา\n   */\n  probe(board, mode = 'weighted') {\n    const arr = this.map.get(OpeningBook.key(board));\n    if (!arr || arr.length === 0) return null;\n\n    let chosen;\n    if (mode === 'best') {\n      chosen = arr.reduce((a, c) => (c.weight > a.weight ? c : a));\n    } else if (mode === 'random') {\n      chosen = arr[Math.floor(Math.random() * arr.length)];\n    } else {\n      const total = arr.reduce((s, e) => s + Math.max(0, e.weight), 0);\n      let r = Math.random() * total;\n      chosen = arr[arr.length - 1];\n      for (const e of arr) { r -= Math.max(0, e.weight); if (r <= 0) { chosen = e; break; } }\n    }\n    return uciToMove(board, chosen.uci);\n  }\n}\n\n\n/* ---- src/engine.js ---- */\n// ============================================================================\n//  Engine MakrukThai  -  engine.js\n//  หน้ากาก (facade) ระดับสูงสำหรับใช้งานจริงในเว็บฝึกหมากรุกไทย\n//\n//  ตัวอย่าง:\n//    import { MakrukEngine } from './src/engine.js';\n//    const eng = new MakrukEngine({ skill: 12 });\n//    eng.move('f3f4');\n//    const { bestMove } = eng.think({ movetime: 800 });\n//    eng.move(bestMove);\n//    console.log(eng.ascii(), eng.isGameOver());\n// ============================================================================\n\n\n\n\n\n\n\n\n\nclass MakrukEngine {\n  constructor(opts = {}) {\n    this.board = new Board(opts.fen || START_FEN);\n    this.searcher = new Search(opts.hash || 16);\n    this.book = opts.book instanceof OpeningBook ? opts.book\n      : (opts.book ? OpeningBook.fromJSON(opts.book) : null);\n    this.options = {\n      skill: 20,\n      useBook: true,\n      bookMode: 'weighted',\n      bookMaxPly: 16,\n      moveTime: 1000,\n    };\n    this._moveStack = [];\n    if (opts.skill != null) this.setOption('Skill Level', opts.skill);\n    if (opts.contempt != null) this.setOption('Contempt', opts.contempt);\n  }\n\n  // --------------------------------------------------------------- state\n  newGame() {\n    this.board.setFen(START_FEN);\n    this._moveStack.length = 0;\n    this.searcher.clearTT();\n  }\n  setFen(fen) {\n    this.board.setFen(fen);\n    this._moveStack.length = 0;\n  }\n  fen() { return this.board.fen(); }\n  ascii() { return this.board.ascii(); }\n  turn() { return this.board.turn; }\n  turnName() { return this.board.turn === WHITE ? 'white' : 'black'; }\n  ply() { return this.board.ply; }\n\n  // -------------------------------------------------------------- moves\n  legalMoves() { return legalMoves(this.board).map(moveToUci); }\n  legalMovesSan() {\n    return legalMoves(this.board).map((m) => moveToSan(this.board, m));\n  }\n  legalMovesFrom(sqOrName) {\n    const sq = typeof sqOrName === 'number' ? sqOrName\n      : (sqOrName.charCodeAt(0) - 97) + (sqOrName.charCodeAt(1) - 49) * 8;\n    return legalMoves(this.board).filter((m) => m.from === sq).map(moveToUci);\n  }\n\n  _resolve(x) {\n    if (x && typeof x === 'object' && 'from' in x && 'to' in x) {\n      // ตรวจซ้ำว่าถูกกติกา\n      for (const m of legalMoves(this.board)) {\n        if (m.from === x.from && m.to === x.to) return m;\n      }\n      return null;\n    }\n    const s = String(x).trim();\n    return /^[a-h][1-8][a-h][1-8]/.test(s.toLowerCase())\n      ? uciToMove(this.board, s)\n      : sanToMove(this.board, s);\n  }\n\n  /** เดินหมาก 1 ตา (รับ uci / san / {from,to}) -> คืน move object; โยน error ถ้าผิดกติกา */\n  move(x) {\n    const m = this._resolve(x);\n    if (!m) throw new Error('illegal move: ' + JSON.stringify(x));\n    const san = moveToSan(this.board, m);\n    this.board.makeMove(m);\n    this._moveStack.push(m);\n    return { ...m, uci: moveToUci(m), san };\n  }\n\n  /** ถอนหมากตาล่าสุด */\n  undo() {\n    const m = this._moveStack.pop();\n    if (!m) return null;\n    this.board.undoMove(m);\n    return m;\n  }\n\n  history() { return this._moveStack.map(moveToUci); }\n\n  // ------------------------------------------------------------- verdict\n  isGameOver() {\n    const lm = legalMoves(this.board);\n    const inChk = this.board.inCheck();\n    if (lm.length === 0) {\n      if (inChk) {\n        return {\n          over: true,\n          result: this.board.turn === WHITE ? '0-1' : '1-0',\n          reason: 'checkmate',\n          winner: this.board.turn === WHITE ? 'black' : 'white',\n        };\n      }\n      return { over: true, result: '1/2-1/2', reason: 'stalemate' };\n    }\n    if (this.board.isRepetition(2)) return { over: true, result: '1/2-1/2', reason: 'threefold' };\n    if (this.board.halfmove >= 100) return { over: true, result: '1/2-1/2', reason: 'fifty-move' };\n    if (countingResult(this.board) === 'draw') return { over: true, result: '1/2-1/2', reason: 'counting' };\n    if (insufficientMaterial(this.board)) return { over: true, result: '1/2-1/2', reason: 'insufficient-material' };\n    return { over: false };\n  }\n\n  inCheck() { return this.board.inCheck(); }\n  countingStatus() { return describeCounting(this.board); }\n  /** คะแนนประเมิน (centipawn) มุมมองฝ่ายขาวเป็นบวก */\n  evaluate() { return evaluate(this.board); }\n  perft(depth) { return perftFn(this.board, depth); }\n\n  // --------------------------------------------------------------- think\n  /**\n   * ให้เอนจิ้นคิดหาหมากที่ดีที่สุด\n   * @param {{movetime?:number, depth?:number, nodes?:number, useBook?:boolean}} limits\n   * @param {(info:object)=>void} [onInfo]\n   */\n  think(limits = {}, onInfo) {\n    const useBook = limits.useBook ?? this.options.useBook;\n    if (useBook && this.book && this.board.ply < this.options.bookMaxPly) {\n      const bm = this.book.probe(this.board, this.options.bookMode);\n      if (bm) {\n        return {\n          bestMove: moveToUci(bm), move: bm, book: true,\n          score: 0, depth: 0, nodes: 0, nps: 0, pv: [moveToUci(bm)],\n        };\n      }\n    }\n    const l = {\n      depth: limits.depth,\n      nodes: limits.nodes,\n      movetime: limits.depth || limits.nodes ? limits.movetime : (limits.movetime ?? this.options.moveTime),\n    };\n    return this.searcher.think(this.board, l, onInfo);\n  }\n\n  /** คิดแล้วเดินให้เลย -> คืนข้อมูลหมากที่เดิน */\n  go(limits = {}, onInfo) {\n    const r = this.think(limits, onInfo);\n    if (!r.bestMove) return null;\n    const played = this.move(r.bestMove);\n    return { ...played, score: r.score, depth: r.depth, nodes: r.nodes, book: !!r.book, pv: r.pv };\n  }\n\n  // -------------------------------------------------------------- options\n  setOption(name, value) {\n    switch (String(name).toLowerCase()) {\n      case 'skill level': case 'skill':\n        this.options.skill = clamp(+value, 0, 20);\n        this.searcher.skill = this.options.skill;\n        break;\n      case 'hash':\n        this.searcher.resize(Math.max(1, +value | 0));\n        break;\n      case 'contempt':\n        this.searcher.contempt = +value | 0;\n        break;\n      case 'ownbook': case 'usebook':\n        this.options.useBook = !!value && value !== 'false';\n        break;\n      case 'bookmode':\n        this.options.bookMode = String(value);\n        break;\n      case 'bookmaxply':\n        this.options.bookMaxPly = +value | 0;\n        break;\n      case 'movetime':\n        this.options.moveTime = +value | 0;\n        break;\n      default:\n        return false;\n    }\n    return true;\n  }\n\n  loadBook(json) { this.book = OpeningBook.fromJSON(json); }\n  setBook(book) { this.book = book; }\n}\n\nfunction clamp(x, lo, hi) { return x < lo ? lo : x > hi ? hi : x; }\n\n\n\n\n\n/* ==== worker glue ==== */\nconst engine = new MakrukEngine();\nlet busy = false;\nfunction postState() {\n  self.postMessage({ type:'state', fen:engine.fen(), turn:engine.turnName(), ply:engine.ply(),\n    inCheck:engine.inCheck(), counting:engine.countingStatus(), gameOver:engine.isGameOver() });\n}\nfunction safeSan(m){ try { return m ? moveToSan(engine.board, m) : null; } catch { return null; } }\nfunction pvSan(pv){\n  if (!Array.isArray(pv) || !pv.length) return [];\n  const b = engine.board, done = [], out = [];\n  try {\n    for (const u of pv) {\n      const mv = uciToMove(b, u);\n      if (!mv) break;\n      out.push(moveToSan(b, mv));\n      b.makeMove(mv); done.push(mv);\n    }\n  } catch (e) {}\n  for (let i = done.length - 1; i >= 0; i--) b.undoMove(done[i]);\n  return out;\n}\nself.onmessage = (ev) => {\n  const msg = ev.data || {};\n  try {\n    switch (msg.type) {\n      case 'newgame': engine.newGame(); postState(); break;\n      case 'position':\n        engine.setFen(msg.fen || START_FEN);\n        if (Array.isArray(msg.moves)) for (const mv of msg.moves) engine.move(mv);\n        postState(); break;\n      case 'domove': {\n        try { const r = engine.move(msg.uci); self.postMessage({ type:'moved', uci:r.uci, san:r.san }); }\n        catch (e) { self.postMessage({ type:'error', message:'illegal move: ' + msg.uci }); }\n        postState(); break;\n      }\n      case 'undo': { const n = Math.max(1, msg.count|0 || 1); for (let i=0;i<n;i++) engine.undo(); postState(); break; }\n      case 'setoption': engine.setOption(msg.name, msg.value); break;\n      case 'loadbook': engine.loadBook(msg.book || {}); break;\n      case 'legal': self.postMessage({ type:'legal', moves:engine.legalMoves(), movesSan:engine.legalMovesSan() }); break;\n      case 'eval': self.postMessage({ type:'eval', cp:engine.evaluate() }); break;\n      case 'perft': {\n        const t0 = (typeof performance!=='undefined'?performance.now():Date.now());\n        const n = engine.perft(msg.depth|0);\n        self.postMessage({ type:'perft', depth:msg.depth|0, nodes:n,\n          ms: Math.round((typeof performance!=='undefined'?performance.now():Date.now()) - t0) });\n        break;\n      }\n      case 'stop': break;\n      case 'go': {\n        if (busy) { self.postMessage({ type:'error', message:'engine busy' }); break; }\n        busy = true;\n        const serial = msg.serial || 0;\n        const limits = { movetime: msg.movetime, depth: msg.depth, nodes: msg.nodes, useBook: msg.useBook };\n        setTimeout(() => {\n          let result = null;\n          try { result = engine.think(limits, (info)=> self.postMessage({ type:'info', serial, ...info, pvSan: pvSan(info.pv) })); }\n          catch (e) { self.postMessage({ type:'error', message:String(e && e.message || e) }); }\n          busy = false;\n          if (result && result.bestMove)\n            self.postMessage({ type:'bestmove', serial, move:result.bestMove, san:safeSan(result.move),\n              book:!!result.book, score:result.score, depth:result.depth, nodes:result.nodes, nps:result.nps,\n              pv:result.pv, pvSan:pvSan(result.pv) });\n          else self.postMessage({ type:'bestmove', serial, move:null });\n        }, 0);\n        break;\n      }\n      default: self.postMessage({ type:'error', message:'unknown message: ' + msg.type });\n    }\n  } catch (e) { busy = false; self.postMessage({ type:'error', message:String(e && e.message || e) }); }\n};\nself.postMessage({ type:'ready' });\n";
+const BOOK = {"512080027:2605123152":[{"uci":"f3f4","weight":5},{"uci":"g3g4","weight":2},{"uci":"e3e4","weight":1}],"4091886367:3294157532":[{"uci":"e6e5","weight":2},{"uci":"d6d5","weight":2},{"uci":"f8f7","weight":1}],"3443010501:3227325253":[{"uci":"e3e4","weight":1},{"uci":"g1f3","weight":1}],"3065507827:578609335":[{"uci":"b8d7","weight":1}],"1458231258:2384702354":[{"uci":"g1f3","weight":1}],"1464702079:1568855390":[{"uci":"d6d5","weight":1},{"uci":"g8e7","weight":1}],"4239656855:4103991092":[{"uci":"c1c2","weight":1}],"3357528098:1902816463":[{"uci":"d8c7","weight":1}],"1115602860:619042889":[{"uci":"e1f2","weight":1}],"700160474:178153434":[{"uci":"c7d6","weight":1}],"793599773:293147658":[{"uci":"f2e3","weight":1}],"1418006774:636411099":[{"uci":"g8e7","weight":1}],"1722934464:521204564":[{"uci":"f1e2","weight":1}],"265021393:353253225":[{"uci":"f8f7","weight":1}],"3636199381:1331725013":[{"uci":"b1d2","weight":2}],"3656331476:3242216174":[{"uci":"f7e6","weight":2}],"1326895658:1059637475":[{"uci":"h1f1","weight":2},{"uci":"d1c1","weight":1}],"2943681846:4121663807":[{"uci":"c8c7","weight":1},{"uci":"e8f7","weight":1}],"4110389169:2755398549":[{"uci":"d1c1","weight":1}],"570635434:3596389057":[{"uci":"e8f7","weight":1},{"uci":"c6c5","weight":1}],"3432999008:335310217":[{"uci":"b8d7","weight":1}],"750932041:3215140524":[{"uci":"e3e4","weight":1}],"1702453321:1736243921":[{"uci":"e1f2","weight":1}],"247219775:1225213250":[{"uci":"f8f7","weight":1}],"3654049339:325710078":[{"uci":"f2e3","weight":1}],"2718175696:670971951":[{"uci":"d8c7","weight":1}],"677740126:1920027817":[{"uci":"f1e2","weight":1}],"1092582735:2020575380":[{"uci":"d6d5","weight":1}],"3941002919:3513823998":[{"uci":"c1c2","weight":1}],"3729602834:1418195205":[{"uci":"c7d6","weight":1}],"3758977963:2172561015":[{"uci":"h3h4","weight":1}],"3469398783:104492565":[{"uci":"f7g7","weight":1}],"1478273271:1833427126":[{"uci":"e3e4","weight":2}],"596864193:2405831492":[{"uci":"d8c7","weight":1},{"uci":"c6c5","weight":1}],"2851210063:3672729538":[{"uci":"g1f3","weight":1}],"2824159466:155719950":[{"uci":"c7d6","weight":1}],"2929952301:313486046":[{"uci":"e4e5","weight":1}],"3349600967:2201527224":[{"uci":"c8c7","weight":1}],"2620149824:3534696722":[{"uci":"e1f2","weight":1}],"4159272502:4241788545":[{"uci":"f8f7","weight":1}],"546926130:2797222717":[{"uci":"f2e3","weight":1}],"1532043737:2452485100":[{"uci":"c6c5","weight":1}],"169389832:3771580020":[{"uci":"f1f2","weight":1}],"84227674:3658141725":[{"uci":"b8c6","weight":1}],"1317279318:1167638097":[{"uci":"d3d4","weight":1}],"3174953110:1724453153":[{"uci":"g8e7","weight":1}],"2399732896:1547124398":[{"uci":"c1c2","weight":1}],"3148010261:3653270869":[{"uci":"g6g5","weight":1}],"18462687:3417033198":[{"uci":"c2d3","weight":1}],"1701787082:4178620417":[{"uci":"e7g6","weight":1}],"1926947344:4253441756":[{"uci":"g1f3","weight":1}],"1937613237:774316048":[{"uci":"d8c7","weight":1}],"4179414587:2074629270":[{"uci":"e1f2","weight":1}],"2463754317:1439951621":[{"uci":"b8c6","weight":1}],"3646474305:3393291593":[{"uci":"e4e5","weight":1}],"2958922923:1540770863":[{"uci":"f8f7","weight":1}],"1731038383:28899731":[{"uci":"f2e3","weight":1}],"484819780:892285250":[{"uci":"g8e7","weight":1}],"785463154:265363149":[{"uci":"f1f2","weight":1}],"567062048:890663076":[{"uci":"g6g5","weight":1}],"2608319210:662553631":[{"uci":"d3d4","weight":1}],"1758342186:70019951":[{"uci":"c8d7","weight":1}],"3399293584:1344987287":[{"uci":"c1c2","weight":1}],"4265004325:3588072300":[{"uci":"e7g6","weight":1}],"3392741858:782748384":[{"uci":"c2d3","weight":1}],"2924454903:471642895":[{"uci":"c7d6","weight":1}],"613753627:2654367584":[{"uci":"e3e4","weight":1}],"1595598637:2081922194":[{"uci":"g8e7","weight":1}],"1831736091:1189720861":[{"uci":"g1f3","weight":1}],"1820938430:2504576465":[{"uci":"e6e5","weight":1}],"1381253220:2437743688":[{"uci":"e1f2","weight":1}],"965830162:3208035291":[{"uci":"f7e6","weight":1}],"2942862572:1096694230":[{"uci":"f2e3","weight":1}],"3567307527:1976168711":[{"uci":"d8c7","weight":1}],"1589748873:541492609":[{"uci":"c1c2","weight":1}],"1785361212:2779891322":[{"uci":"d6d5","weight":1}],"3247694036:212794384":[{"uci":"b1d2","weight":1}],"3234279381:2190357547":[{"uci":"b8d7","weight":1}],"546969596:785481486":[{"uci":"f1e2","weight":1}],"1239422189:617593651":[{"uci":"c7d6","weight":1}],"2582276401:1296583095":[{"uci":"c8c7","weight":1}],"3261129654:484432669":[{"uci":"h1f1","weight":1}],"1695186093:2036790690":[{"uci":"c6c5","weight":1}],"876868220:193378362":[{"uci":"g1e2","weight":1}],"3516747774:1949616687":[{"uci":"f8f7","weight":1}],"116217850:777682835":[{"uci":"e1f2","weight":1}],"1831367052:2211840":[{"uci":"d6d5","weight":1}],"3335643748:2839476842":[{"uci":"f2e3","weight":1}],"3172576655:2645111483":[{"uci":"b8c6","weight":1}],"4137192835:37444855":[{"uci":"f1f2","weight":1}],"4186248401:956052126":[{"uci":"d8c7","weight":1}],"1944353631:1836271128":[{"uci":"c1c2","weight":1}],"1196403946:3900966371":[{"uci":"c7d6","weight":1}],"1102670381:4083381811":[{"uci":"d3d4","weight":1}],"2986380525:3492993347":[{"uci":"c8d7","weight":1}],"273922647:2218021563":[{"uci":"b1d2","weight":1}],"285701462:169122432":[{"uci":"g8e7","weight":1}],"590578016:820688143":[{"uci":"c2d3","weight":1}],"1195705205:38915296":[{"uci":"a8c8","weight":1}],"762680963:1796379505":[{"uci":"f3f4","weight":1}],"3222607111:873287677":[{"uci":"d5e4","weight":1}]};
+
+let engine = null;        // ตัวรับข้อความ: { postMessage(msg) }
+let usingWorker = false;
+let bootstrapped = false;
+
+function bootLocalEngine() {
+  // shim ของ `self` — ส่งข้อความแบบ async ทั้งสองทาง เลียนแบบขอบเขตของ Worker
+  const shim = {
+    onmessage: null,
+    postMessage: (m) => setTimeout(() => onEngineMessage(m), 0),
+  };
+  new Function("self", ENGINE_SRC)(shim);
+  return { postMessage: (m) => setTimeout(() => { if (shim.onmessage) shim.onmessage({ data: m }); }, 0) };
+}
+
+const FORCE_LOCAL = /[?&](local|noworker)\b/.test(location.search);
+try {
+  if (FORCE_LOCAL) throw new Error("forced local engine");
+  const w = new Worker(URL.createObjectURL(new Blob([ENGINE_SRC], { type: "text/javascript" })));
+  w.onmessage = (e) => onEngineMessage(e.data);
+  w.onerror = () => { if (!bootstrapped) { try { w.terminate(); } catch (e) {} engine = bootLocalEngine(); usingWorker = false; } };
+  engine = w;
+  usingWorker = true;
+} catch (err) {
+  engine = bootLocalEngine();
+  usingWorker = false;
+}
+const post = (m) => engine.postMessage(m);
+
+const FILES = "abcdefgh";
+const GLYPH = { P:"♟", N:"♞", S:"♝", M:"♛", R:"♜", K:"♚" };
+const CH = { p:"P", n:"N", s:"S", m:"M", r:"R", k:"K" };
+
+const boardEl = document.getElementById("board");
+const frameEl = document.getElementById("frame");
+const turnChip = document.getElementById("turnChip");
+const turnText = document.getElementById("turnText");
+const countPill = document.getElementById("countPill");
+const resultEl = document.getElementById("result");
+const engineStat = document.getElementById("engineStat");
+const movesEl = document.getElementById("moves");
+const evalWhite = document.getElementById("evalWhite");
+
+let ready = false;
+let board64 = [];
+let turn = "white";
+let humanSide = "white";
+let flipped = false;
+let legal = [];
+let selected = -1;
+let lastMove = null;
+let checkSq = -1;
+let sanList = [];
+let thinking = false;
+let gameOver = false;
+let pendingGo = null;       // 'engine' | 'force' | 'hint'
+let goSerial = 0;
+
+function onEngineMessage(m) {
+  switch (m.type) {
+    case "ready":
+      ready = true; bootstrapped = true;
+      post({ type: "loadbook", book: BOOK });
+      post({ type: "setoption", name: "Skill Level", value: +document.getElementById("skill").value });
+      newGame();
+      break;
+    case "state":
+      turn = m.turn; parseFen(m.fen);
+      checkSq = m.inCheck ? findKing(turn) : -1;
+      renderCount(m.counting); render(); renderMoves(); verdict(m.gameOver);
+      post({ type: "legal" });
+      if (!gameOver && !thinking && !pendingGo) {
+        const yours = turn === humanSide;
+        turnText.textContent = (turn === "white" ? "ตาขาว" : "ตาดำ") +
+          (yours ? " — ตาคุณ" : "") + (m.inCheck ? " · ถูกรุก!" : "");
+      }
+      maybeEngineMove();
+      break;
+    case "legal": legal = m.moves; render(); break;
+    case "moved":
+      sanList.push(m.san || m.uci);
+      lastMove = { from: sqIdx(m.uci.slice(0, 2)), to: sqIdx(m.uci.slice(2, 4)) };
+      renderMoves(); post({ type: "eval" });
+      break;
+    case "info": showInfo(m); break;
+    case "bestmove": {
+      thinking = false; frameEl.classList.remove("is-thinking");
+      const kind = pendingGo; pendingGo = null;
+      if (m.serial !== goSerial) break;
+      if (kind === "hint") {
+        if (m.move) { selected = sqIdx(m.move.slice(0, 2)); render(); turnText.textContent = "แนะนำ: " + (m.san || m.move); }
+      } else if (m.move && !gameOver) {
+        post({ type: "domove", uci: m.move });
+      } else if (!m.move) {
+        turnText.textContent = "บอทไม่มีหมากเดิน";
+      }
+      break;
+    }
+    case "eval": setEval(m.cp); break;
+    case "error": engineStat.textContent = "ผิดพลาด: " + m.message; thinking = false; frameEl.classList.remove("is-thinking"); break;
+  }
+}
+
+function newGame() {
+  sanList = []; selected = -1; lastMove = null; gameOver = false;
+  pendingGo = null; goSerial++;
+  resultEl.textContent = "";
+  post({ type: "newgame" });
+  post({ type: "eval" });
+}
+
+function startGo(kind) {
+  pendingGo = kind; thinking = true; goSerial++;
+  frameEl.classList.add("is-thinking");
+  turnText.textContent = kind === "hint" ? "กำลังหาคำแนะนำ…" : "บอทกำลังคิด…";
+  const mt = +document.getElementById("time").value;
+  post({ type: "go", serial: goSerial, movetime: kind === "hint" ? Math.min(900, mt) : mt });
+}
+function maybeEngineMove() {
+  if (gameOver || thinking || pendingGo) return;
+  if (turn !== humanSide) startGo("engine");
+}
+
+function verdict(v) {
+  if (!v || !v.over) { gameOver = false; return; }
+  gameOver = true;
+  const TH = { checkmate:"รุกจน", stalemate:"อับ — เสมอ", threefold:"ตำแหน่งซ้ำ 3 ครั้ง — เสมอ",
+    "fifty-move":"50 ตาไม่คืบหน้า — เสมอ", counting:"ครบการนับ — เสมอ", "insufficient-material":"กำลังไม่พอ — เสมอ" };
+  const who = v.winner ? (v.winner === "white" ? " · ขาวชนะ" : " · ดำชนะ") : "";
+  resultEl.textContent = (TH[v.reason] || v.reason) + who;
+}
+
+// ---------- interaction ----------
+function onClick(idx) {
+  if (thinking || gameOver || turn !== humanSide) return;
+  const p = board64[idx];
+  if (selected === -1) { if (p && p.c === humanSide[0]) sel(idx); return; }
+  if (idx === selected) { selected = -1; render(); return; }
+  const u = sqName(selected) + sqName(idx);
+  const hit = legal.find((mv) => mv.startsWith(u));
+  if (hit) { selected = -1; post({ type: "domove", uci: hit }); turnText.textContent = "ตาบอท"; }
+  else if (p && p.c === humanSide[0]) sel(idx);
+  else { selected = -1; render(); }
+}
+function sel(i) { selected = i; render(); }
+
+// ---------- rendering ----------
+function parseFen(f) {
+  board64 = new Array(64).fill(null);
+  const rows = f.split(/\s+/)[0].split("/");
+  for (let i = 0; i < 8; i++) {
+    const rank = 7 - i; let file = 0;
+    for (const ch of rows[i]) {
+      if (ch >= "1" && ch <= "9") { file += +ch; continue; }
+      const low = ch.toLowerCase();
+      board64[rank * 8 + file] = { c: ch === low ? "b" : "w", t: CH[low] };
+      file++;
+    }
+  }
+}
+function findKing(s) { const w = s === "white" ? "w" : "b"; for (let i = 0; i < 64; i++){ const p = board64[i]; if (p && p.t === "K" && p.c === w) return i; } return -1; }
+function sqName(i) { return FILES[i & 7] + ((i >> 3) + 1); }
+function sqIdx(s) { return (s.charCodeAt(0) - 97) + (s.charCodeAt(1) - 49) * 8; }
+
+function render() {
+  const order = [];
+  for (let r = 7; r >= 0; r--) for (let f = 0; f < 8; f++) order.push(r * 8 + f);
+  const cells = flipped ? order.slice().reverse() : order;
+  const hints = selected >= 0
+    ? legal.filter((mv) => mv.slice(0, 2) === sqName(selected)).map((mv) => sqIdx(mv.slice(2, 4)))
+    : [];
+  const frag = document.createDocumentFragment();
+  for (const idx of cells) {
+    const f = idx & 7, r = idx >> 3;
+    const el = document.createElement("div");
+    el.className = "sq " + ((f + r) % 2 === 0 ? "d" : "l");
+    el.setAttribute("role", "gridcell");
+    if (idx === selected) el.classList.add("sel");
+    if (lastMove && (idx === lastMove.from || idx === lastMove.to)) el.classList.add("last");
+    if (idx === checkSq) el.classList.add("chk");
+    if (hints.includes(idx)) { el.classList.add("mv"); if (board64[idx]) el.classList.add("cap"); }
+    const edgeFile = flipped ? 7 : 0, edgeRank = flipped ? 7 : 0;
+    if (r === edgeRank) { const c = document.createElement("span"); c.className = "sq__co f"; c.textContent = FILES[f]; el.appendChild(c); }
+    if (f === edgeFile) { const c = document.createElement("span"); c.className = "sq__co r"; c.textContent = r + 1; el.appendChild(c); }
+    const p = board64[idx];
+    if (p) { const pe = document.createElement("div"); pe.className = "piece " + p.c; pe.textContent = GLYPH[p.t]; el.appendChild(pe); }
+    el.addEventListener("click", () => onClick(idx));
+    frag.appendChild(el);
+  }
+  boardEl.replaceChildren(frag);
+  turnChip.className = "chip " + (turn === "white" ? "w" : "b");
+}
+
+function renderMoves() {
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < sanList.length; i += 2) {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<span class="n">${i / 2 + 1}.</span><span>${sanList[i] || ""}</span><span>${sanList[i + 1] || ""}</span>`;
+    frag.appendChild(row);
+  }
+  movesEl.replaceChildren(frag);
+  movesEl.scrollTop = movesEl.scrollHeight;
+}
+function renderCount(c) {
+  if (c && c.active) { countPill.textContent = "⏱ " + c.text; countPill.classList.add("on"); }
+  else { countPill.textContent = "ยังไม่เริ่มนับ"; countPill.classList.remove("on"); }
+}
+function showInfo(m) {
+  const sc = m.scoreType === "mate" ? "รุกจน #" + Math.abs(m.mate) : (m.score / 100).toFixed(2);
+  turnText.textContent = (turn === "white" ? "ตาขาว" : "ตาดำ");
+  const pv = (m.pvSan && m.pvSan.length ? m.pvSan : (m.pv || [])).slice(0, 10).join(" ");
+  engineStat.innerHTML =
+    `ระดับลึก <b>${m.depth}</b> · แต้ม <b>${sc}</b><br>` +
+    `<b>${(m.nodes / 1000 | 0).toLocaleString()}k</b> ตำแหน่ง · <b>${(m.nps / 1000 | 0).toLocaleString()}k</b>/วิ` +
+    `<span class="pv">${pv}</span>`;
+  setEval(turn === "white" ? m.score : -m.score);
+}
+function setEval(cpWhite) {
+  const c = Math.max(-900, Math.min(900, cpWhite || 0));
+  evalWhite.style.height = (50 + c / 18) + "%";
+}
+
+// ---------- controls ----------
+document.getElementById("new").addEventListener("click", () => ready && newGame());
+document.getElementById("undo").addEventListener("click", () => {
+  if (!ready || thinking) return;
+  const back = Math.min(sanList.length, turn === humanSide ? 2 : 1);
+  if (!back) return;
+  for (let i = 0; i < back; i++) sanList.pop();
+  gameOver = false; resultEl.textContent = ""; lastMove = null;
+  post({ type: "undo", count: back }); post({ type: "eval" });
+});
+document.getElementById("flip").addEventListener("click", () => { flipped = !flipped; render(); });
+document.getElementById("hint").addEventListener("click", () => { if (ready && !thinking) startGo("hint"); });
+document.getElementById("gonow").addEventListener("click", () => { if (ready && !thinking && !gameOver) startGo("force"); });
+document.getElementById("side").addEventListener("click", () => {
+  humanSide = humanSide === "white" ? "black" : "white";
+  document.getElementById("side").textContent = "คุณเล่น: " + (humanSide === "white" ? "ขาว" : "ดำ");
+  flipped = humanSide === "black"; render(); maybeEngineMove();
+});
+const skillR = document.getElementById("skill");
+skillR.addEventListener("input", () => {
+  document.getElementById("skillVal").textContent = skillR.value;
+  if (ready) post({ type: "setoption", name: "Skill Level", value: +skillR.value });
+});
+const timeR = document.getElementById("time");
+timeR.addEventListener("input", () => { document.getElementById("timeVal").textContent = timeR.value; });
+
+// theme toggle (system → light → dark → system)
+const themeBtn = document.getElementById("themeBtn");
+let themeMode = "system";
+themeBtn.addEventListener("click", () => {
+  themeMode = themeMode === "system" ? "light" : themeMode === "light" ? "dark" : "system";
+  if (themeMode === "system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", themeMode);
+  themeBtn.textContent = themeMode === "system" ? "โหมด: ตามระบบ" : themeMode === "light" ? "โหมด: สว่าง" : "โหมด: มืด";
+});
+
+// formation reference
+const FORMATIONS = [
+  ["R","ม้าเทียมโคนขุนพล ม้าขวา","รูปมาตรฐานของ GodratSF+ พัฒนาม้าขวาขึ้นเทียบโคน"],
+  ["Fast","ม้าขวา (บุกเร็ว)","เหมือน R แต่ตั้งค่าให้พยายามบุกเร็ว"],
+  ["RR-white","ม้าขวา (เฉพาะหมากขาว)","ใช้รูปม้าขวาเมื่อเล่นฝ่ายขาว"],
+  ["RR-black","ม้าขวา (เฉพาะหมากดำ)","ใช้รูปม้าขวาเมื่อเล่นฝ่ายดำ"],
+  ["P-white","ม้าขวาเบี้ยก้ามปู (ขาว, เบี้ย h4)","รูปม้าขวา ผสมดันเบี้ยริม h4"],
+  ["P-black","ม้าขวาเบี้ยก้ามปู (ดำ, เบี้ย a5)","รูปม้าขวา ผสมดันเบี้ยริม a5"],
+  ["M","เม็ดซ้าย ม้าซ้าย","เล่นปีกซ้าย ดันเม็ดและพัฒนาม้าซ้าย"],
+  ["L","ม้าซ้าย เม็ดซ้าย","สลับลำดับกับ M ขึ้นม้าซ้ายก่อน"],
+  ["C","ม้าเทียมโคนผสม","ผสมแนวม้าเทียมโคนทั้งสองปีก"],
+  ["S","ม้ามังกร","พัฒนาม้าออกริมแล้ววกเข้าทำเกมรุก"],
+  ["H","ม้าลู่","จัดม้าทั้งสองให้อยู่แนวตั้งเดียวกัน"],
+  ["K","ม้าเทียมมังกรสลับ","สลับแนวม้าเทียม/ม้ามังกรตามคู่ต่อสู้"],
+  ["T","ม้าเทียมโคนขุนพลคู่","ฝ่ายดำขึ้นโคนเป็นภาพสะท้อนตรงข้ามขาว"],
+  ["N","ม้าอุปการ","วางม้าให้หนุนหมากกลางและคุมช่องสำคัญ"],
+  ["O","เรือมเหศวร","เปิดแถวเรือเร็ว เน้นเกมเรือคู่"],
+  ["MC","เม็ดซ้ายโคนนายผล","ผสมเม็ดซ้ายกับการวางโคนแบบนายผล"],
+  ["NM","ม้าอุปการ + เม็ดซ้าย","ผสมแนว N กับ M"],
+  ["NO","ม้าอุปการ + เรือมเหศวร","ผสมแนว N กับ O"],
+];
+document.getElementById("fgrid").innerHTML = FORMATIONS.map(
+  ([c, th, d]) => `<div class="fitem"><div class="code">${c}</div><div class="th">${th}</div><div class="desc">${d}</div></div>`
+).join("");
+</script>
+</body>
+</html>

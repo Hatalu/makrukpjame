@@ -14,6 +14,7 @@
     "test:perft": "node test/perft.mjs",
     "test:rules": "node test/rules.mjs",
     "play": "node examples/cli.mjs",
+    "build": "node tools/build-standalone.mjs",
     "serve": "node tools/serve.mjs 4180",
     "import-pgn": "node tools/import-pgn.mjs"
   },

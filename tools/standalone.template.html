@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>สนามซ้อมหมากรุกไทย</title>
+<meta name="description" content="กระดานหมากรุกไทยเล่นกับเอนจิ้น AI ปรับระดับได้ พร้อมกฎการนับและรูปแบบเปิดหมาก">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Trirong:ital,wght@0,500;0,600;1,500&family=Sarabun:wght@400;500;600;700&display=swap">
+<style>
+  /* ============ palette : teak lacquer & brass ============ */
+  :root {
+    --ground:#e7dbc3; --surface:#f1e8d5; --surface-2:#ece0c8;
+    --ink:#2b2013; --ink-soft:#6f5d43; --line:#cdbb92;
+    --accent:#9e2b25; --accent-ink:#fff3ec;
+    --brass:#9a6f2e; --brass-bright:#b98a3c;
+    --good:#3f6b52;
+    --sq-light:#e6cb9c; --sq-dark:#9a6336;
+    --frame:#5f4022; --frame-edge:#3f2914;
+    --piece-light:#f0e2c1; --piece-light-ink:#2b2013;
+    --piece-dark:#33251a; --piece-dark-ink:#f2e3c2;
+    --shadow:rgba(48,30,14,.28);
+    --focus:#9e2b25;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#160e07; --surface:#221710; --surface-2:#2b1e14;
+      --ink:#efe2cb; --ink-soft:#b19a77; --line:#3c2b1b;
+      --accent:#dc5a4d; --accent-ink:#1a0d09;
+      --brass:#c99a4e; --brass-bright:#e0b568;
+      --good:#6fae86;
+      --sq-light:#d6bc8f; --sq-dark:#7a4b29;
+      --frame:#3c2817; --frame-edge:#1f130a;
+      --piece-light:#ecdcb9; --piece-light-ink:#241a12;
+      --piece-dark:#221812; --piece-dark-ink:#ecdcb9;
+      --shadow:rgba(0,0,0,.5);
+      --focus:#dc5a4d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#160e07; --surface:#221710; --surface-2:#2b1e14;
+    --ink:#efe2cb; --ink-soft:#b19a77; --line:#3c2b1b;
+    --accent:#dc5a4d; --accent-ink:#1a0d09;
+    --brass:#c99a4e; --brass-bright:#e0b568;
+    --good:#6fae86;
+    --sq-light:#d6bc8f; --sq-dark:#7a4b29;
+    --frame:#3c2817; --frame-edge:#1f130a;
+    --piece-light:#ecdcb9; --piece-light-ink:#241a12;
+    --piece-dark:#221812; --piece-dark-ink:#ecdcb9;
+    --shadow:rgba(0,0,0,.5);
+    --focus:#dc5a4d;
+  }
+
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:"Sarabun","Leelawadee UI","Noto Sans Thai",system-ui,sans-serif;
+    font-size:16px; line-height:1.6; letter-spacing:.005em;
+  }
+  @media (prefers-reduced-motion:reduce){ *{ animation-duration:.001ms!important; transition-duration:.001ms!important; } }
+
+  h1,h2,h3 { font-family:"Trirong","Sarabun",serif; font-weight:600; margin:0; text-wrap:balance; }
+
+  /* ============ top bar ============ */
+  .topbar {
+    display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+    padding:18px clamp(14px,4vw,40px) 14px;
+    border-bottom:1px solid var(--line);
+  }
+  .brand { font-family:"Trirong",serif; font-weight:600; font-size:clamp(20px,3.4vw,27px); color:var(--ink); }
+  .brand .dot { color:var(--accent); }
+  .kicker {
+    font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--ink-soft); font-weight:600;
+  }
+  .topbar .spacer { flex:1; }
+  .theme-btn {
+    border:1px solid var(--line); background:var(--surface); color:var(--ink-soft);
+    border-radius:999px; padding:6px 14px; font:inherit; font-size:13px; cursor:pointer;
+  }
+  .theme-btn:hover { border-color:var(--brass); color:var(--ink); }
+
+  /* ============ layout ============ */
+  .wrap {
+    display:grid; grid-template-columns:minmax(0,1fr) 340px;
+    gap:clamp(18px,3vw,40px);
+    padding:clamp(16px,3.5vw,38px) clamp(14px,4vw,40px) 48px;
+    align-items:start; max-width:1180px; margin:0 auto;
+  }
+  @media (max-width:880px){ .wrap { grid-template-columns:minmax(0,1fr); } }
+
+  /* ============ board ============ */
+  .board-stage { display:flex; gap:14px; align-items:stretch; }
+  .evalbar {
+    width:12px; flex:0 0 12px; align-self:stretch; border-radius:7px;
+    border:1px solid var(--frame-edge); overflow:hidden; position:relative;
+    background:var(--piece-dark);
+  }
+  .evalbar__white { position:absolute; left:0; right:0; bottom:0; background:linear-gradient(var(--brass-bright),var(--brass));
+    transition:height .35s cubic-bezier(.4,0,.2,1); height:50%; }
+  .evalbar__mid { position:absolute; left:0; right:0; height:2px; background:var(--accent); opacity:.7; }
+
+  .board-frame {
+    flex:1 1 auto; position:relative; padding:26px;
+    background:
+      linear-gradient(135deg,var(--frame),var(--frame-edge));
+    border-radius:8px;
+    box-shadow:0 10px 30px -8px var(--shadow), inset 0 0 0 1px rgba(0,0,0,.25);
+  }
+  .board-frame::after {
+    content:""; position:absolute; inset:8px; border-radius:4px; pointer-events:none;
+    border:1px solid var(--brass); opacity:.35;
+  }
+  .board-frame.is-thinking::before {
+    content:""; position:absolute; inset:0; border-radius:8px; pointer-events:none;
+    background:linear-gradient(115deg,transparent 40%,color-mix(in srgb,var(--brass-bright) 55%,transparent) 50%,transparent 60%);
+    background-size:280% 100%; animation:shimmer 1.5s linear infinite;
+  }
+  @keyframes shimmer { from{ background-position:120% 0; } to{ background-position:-120% 0; } }
+
+  .board {
+    display:grid; grid-template-columns:repeat(8,1fr); aspect-ratio:1;
+    width:100%; border:1px solid var(--frame-edge);
+    touch-action:manipulation;
+  }
+  .sq { position:relative; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .sq.l { background:var(--sq-light); } .sq.d { background:var(--sq-dark); }
+  .sq__co { position:absolute; font-size:10px; font-weight:600; opacity:.5; }
+  .sq__co.f { right:3px; bottom:1px; } .sq__co.r { left:3px; top:1px; }
+  .sq.sel { box-shadow:inset 0 0 0 4px var(--accent); }
+  .sq.mv::after {
+    content:""; position:absolute; width:26%; height:26%; border-radius:50%;
+    background:color-mix(in srgb,var(--good) 70%,transparent);
+  }
+  .sq.mv.cap::after { width:82%; height:82%; background:none;
+    border:5px solid color-mix(in srgb,var(--good) 60%,transparent); }
+  .sq.last { box-shadow:inset 0 0 0 4px color-mix(in srgb,var(--brass-bright) 75%,transparent); }
+  .sq.last.pulse { animation:pulse .5s ease-out; }
+  @keyframes pulse { 0%{ box-shadow:inset 0 0 0 4px var(--accent);} 100%{ box-shadow:inset 0 0 0 4px color-mix(in srgb,var(--brass-bright) 75%,transparent);} }
+  .sq.chk .piece { box-shadow:0 0 0 3px var(--accent), 0 3px 7px var(--shadow); }
+
+  .piece {
+    width:78%; height:78%; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:min(6vw,42px); line-height:1;
+    box-shadow:0 3px 7px var(--shadow), inset 0 2px 3px rgba(255,255,255,.15), inset 0 -3px 6px rgba(0,0,0,.28);
+    user-select:none;
+  }
+  .piece.w { background:radial-gradient(circle at 38% 32%,color-mix(in srgb,var(--piece-light) 88%,#fff),var(--piece-light) 62%,color-mix(in srgb,var(--piece-light) 78%,#000));
+    color:var(--piece-light-ink); }
+  .piece.b { background:radial-gradient(circle at 38% 32%,color-mix(in srgb,var(--piece-dark) 82%,#fff 18%),var(--piece-dark) 60%,color-mix(in srgb,var(--piece-dark) 70%,#000));
+    color:var(--piece-dark-ink); }
+
+  /* ============ side panel ============ */
+  .panel { display:flex; flex-direction:column; gap:16px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:15px 16px; }
+  .card h2 { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:10px; font-family:"Sarabun",sans-serif; font-weight:700; }
+
+  .turn { display:flex; align-items:center; gap:10px; font-size:15px; }
+  .turn .chip { width:16px; height:16px; border-radius:50%; border:1px solid var(--frame-edge); }
+  .turn .chip.w { background:var(--piece-light); } .turn .chip.b { background:var(--piece-dark); }
+
+  .btns { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  button.act {
+    font:inherit; font-size:13.5px; padding:9px 10px; cursor:pointer;
+    background:var(--surface-2); color:var(--ink); border:1px solid var(--line); border-radius:8px;
+  }
+  button.act:hover { border-color:var(--brass); }
+  button.act.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
+  button.act.primary:hover { filter:brightness(1.06); }
+  button.act:focus-visible, .theme-btn:focus-visible, select:focus-visible, input:focus-visible {
+    outline:2px solid var(--focus); outline-offset:2px;
+  }
+
+  .ctl { margin-top:12px; }
+  .ctl label { display:flex; justify-content:space-between; font-size:12.5px; color:var(--ink-soft); margin-bottom:4px; }
+  .ctl label b { color:var(--ink); font-variant-numeric:tabular-nums; }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+
+  .stat { font-size:13px; line-height:1.85; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+  .stat b { color:var(--ink); }
+  .stat .pv { display:block; font-size:11.5px; margin-top:2px; word-break:break-all; opacity:.85; }
+
+  .count-pill {
+    display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:999px; padding:3px 11px; color:var(--ink);
+  }
+  .count-pill.on { border-color:var(--accent); color:var(--accent); }
+
+  .result { font-family:"Trirong",serif; font-size:16px; font-weight:600; color:var(--accent); min-height:1.2em; }
+
+  .moves {
+    font-variant-numeric:tabular-nums; font-size:13px; line-height:1.75;
+    max-height:230px; overflow-y:auto; background:var(--surface-2);
+    border:1px solid var(--line); border-radius:8px; padding:8px 10px;
+  }
+  .moves .row { display:grid; grid-template-columns:28px 1fr 1fr; gap:6px; }
+  .moves .n { color:var(--ink-soft); }
+
+  /* ============ formation reference ============ */
+  .formations { margin-top:22px; grid-column:1 / -1; max-width:1180px; }
+  .formations > summary {
+    cursor:pointer; font-family:"Trirong",serif; font-size:18px; font-weight:600;
+    padding:12px 0; border-top:1px solid var(--line); list-style:none;
+  }
+  .formations > summary::-webkit-details-marker { display:none; }
+  .formations > summary::before { content:"▸ "; color:var(--accent); }
+  .formations[open] > summary::before { content:"▾ "; }
+  .fgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px; padding:6px 0 4px; }
+  .fitem { background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:11px 13px; }
+  .fitem .code { font-family:"Trirong",serif; font-weight:600; color:var(--accent); font-size:14px; }
+  .fitem .th { font-weight:600; font-size:13.5px; }
+  .fitem .desc { font-size:12px; color:var(--ink-soft); margin-top:3px; }
+
+  .legend { display:flex; flex-wrap:wrap; gap:5px 14px; font-size:12px; color:var(--ink-soft); }
+  .legend span b { color:var(--ink); font-size:15px; margin-right:2px; }
+
+  .foot { grid-column:1/-1; max-width:1180px; margin:26px auto 0; font-size:12px; color:var(--ink-soft); text-align:center; }
+  .foot a { color:var(--accent); }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">สนามซ้อม<span class="dot">หมากรุกไทย</span></span>
+  <span class="kicker">Makruk Trainer · Engine MakrukThai</span>
+  <span class="spacer"></span>
+  <button class="theme-btn" id="themeBtn" type="button">โหมดมืด/สว่าง</button>
+</header>
+
+<main class="wrap">
+  <section>
+    <div class="board-stage">
+      <div class="evalbar" title="แต้มประเมิน (ขาวได้เปรียบ = แถบทองสูงขึ้น)">
+        <div class="evalbar__white" id="evalWhite"></div>
+        <div class="evalbar__mid"></div>
+      </div>
+      <div class="board-frame" id="frame">
+        <div class="board" id="board" role="grid" aria-label="กระดานหมากรุกไทย"></div>
+      </div>
+    </div>
+    <p class="legend" style="margin-top:12px">
+      <span><b>♚</b>ขุน</span><span><b>♛</b>เม็ด</span><span><b>♜</b>เรือ</span>
+      <span><b>♞</b>ม้า</span><span><b>♝</b>โคน</span><span><b>♟</b>เบี้ย</span>
+      <span style="opacity:.7">· เบี้ยถึงแถวที่ 6 เลื่อนขั้นเป็นเม็ด</span>
+    </p>
+  </section>
+
+  <aside class="panel">
+    <div class="card">
+      <h2>สถานะ</h2>
+      <div class="turn"><span class="chip" id="turnChip"></span><span id="turnText">กำลังโหลดเอนจิ้น…</span></div>
+      <div style="margin-top:8px"><span class="count-pill" id="countPill">ยังไม่เริ่มนับ</span></div>
+      <div class="result" id="result"></div>
+    </div>
+
+    <div class="card">
+      <h2>ควบคุม</h2>
+      <div class="btns">
+        <button class="act primary" id="new" type="button">เกมใหม่</button>
+        <button class="act" id="undo" type="button">ถอนตา</button>
+        <button class="act" id="flip" type="button">พลิกกระดาน</button>
+        <button class="act" id="hint" type="button">ขอคำแนะนำ</button>
+        <button class="act" id="side" type="button">คุณเล่น: ขาว</button>
+        <button class="act" id="gonow" type="button">ให้บอทเดิน</button>
+      </div>
+      <div class="ctl">
+        <label>ระดับความเก่งของบอท <b id="skillVal">12</b></label>
+        <input type="range" id="skill" min="0" max="20" value="12" aria-label="ระดับความเก่ง">
+      </div>
+      <div class="ctl">
+        <label>เวลาคิดต่อตา <b><span id="timeVal">900</span> ms</b></label>
+        <input type="range" id="time" min="200" max="4000" step="100" value="900" aria-label="เวลาคิดต่อตา">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>สมองของบอท</h2>
+      <div class="stat" id="engineStat">รอเริ่มเกม…</div>
+    </div>
+
+    <div class="card">
+      <h2>รายการเดิน</h2>
+      <div class="moves" id="moves"></div>
+    </div>
+  </aside>
+
+  <details class="formations">
+    <summary>รูปแบบเปิดหมากสไตล์ GodratSF+ (18 แบบ)</summary>
+    <div class="fgrid" id="fgrid"></div>
+  </details>
+
+  <p class="foot">
+    เอนจิ้น alpha-beta / Stockfish-lite เขียนด้วย JavaScript ล้วน · กติกาหมากรุกไทยครบ (เลื่อนขั้นเป็นเม็ด, กฎการนับ) ·
+    ทำงานทั้งหมดในเบราว์เซอร์ ไม่ส่งข้อมูลออกที่ไหน
+  </p>
+</main>
+
+<script>
+"use strict";
+// ---------- เอนจิ้นฝังในไฟล์ ----------
+// ปกติรันใน Blob Worker (ไม่ให้หน้าเว็บค้าง) ถ้าสภาพแวดล้อมบล็อก worker
+// จะ fallback ไปรันบน main thread แทน (โปรโตคอลข้อความเหมือนกัน)
+const ENGINE_SRC = /*__ENGINE_WORKER_SOURCE__*/;
+const BOOK = /*__BOOK_JSON__*/;
+
+let engine = null;        // ตัวรับข้อความ: { postMessage(msg) }
+let usingWorker = false;
+let bootstrapped = false;
+
+function bootLocalEngine() {
+  // shim ของ `self` — ส่งข้อความแบบ async ทั้งสองทาง เลียนแบบขอบเขตของ Worker
+  const shim = {
+    onmessage: null,
+    postMessage: (m) => setTimeout(() => onEngineMessage(m), 0),
+  };
+  new Function("self", ENGINE_SRC)(shim);
+  return { postMessage: (m) => setTimeout(() => { if (shim.onmessage) shim.onmessage({ data: m }); }, 0) };
+}
+
+const FORCE_LOCAL = /[?&](local|noworker)\b/.test(location.search);
+try {
+  if (FORCE_LOCAL) throw new Error("forced local engine");
+  const w = new Worker(URL.createObjectURL(new Blob([ENGINE_SRC], { type: "text/javascript" })));
+  w.onmessage = (e) => onEngineMessage(e.data);
+  w.onerror = () => { if (!bootstrapped) { try { w.terminate(); } catch (e) {} engine = bootLocalEngine(); usingWorker = false; } };
+  engine = w;
+  usingWorker = true;
+} catch (err) {
+  engine = bootLocalEngine();
+  usingWorker = false;
+}
+const post = (m) => engine.postMessage(m);
+
+const FILES = "abcdefgh";
+const GLYPH = { P:"♟", N:"♞", S:"♝", M:"♛", R:"♜", K:"♚" };
+const CH = { p:"P", n:"N", s:"S", m:"M", r:"R", k:"K" };
+
+const boardEl = document.getElementById("board");
+const frameEl = document.getElementById("frame");
+const turnChip = document.getElementById("turnChip");
+const turnText = document.getElementById("turnText");
+const countPill = document.getElementById("countPill");
+const resultEl = document.getElementById("result");
+const engineStat = document.getElementById("engineStat");
+const movesEl = document.getElementById("moves");
+const evalWhite = document.getElementById("evalWhite");
+
+let ready = false;
+let board64 = [];
+let turn = "white";
+let humanSide = "white";
+let flipped = false;
+let legal = [];
+let selected = -1;
+let lastMove = null;
+let checkSq = -1;
+let sanList = [];
+let thinking = false;
+let gameOver = false;
+let pendingGo = null;       // 'engine' | 'force' | 'hint'
+let goSerial = 0;
+
+function onEngineMessage(m) {
+  switch (m.type) {
+    case "ready":
+      ready = true; bootstrapped = true;
+      post({ type: "loadbook", book: BOOK });
+      post({ type: "setoption", name: "Skill Level", value: +document.getElementById("skill").value });
+      newGame();
+      break;
+    case "state":
+      turn = m.turn; parseFen(m.fen);
+      checkSq = m.inCheck ? findKing(turn) : -1;
+      renderCount(m.counting); render(); renderMoves(); verdict(m.gameOver);
+      post({ type: "legal" });
+      if (!gameOver && !thinking && !pendingGo) {
+        const yours = turn === humanSide;
+        turnText.textContent = (turn === "white" ? "ตาขาว" : "ตาดำ") +
+          (yours ? " — ตาคุณ" : "") + (m.inCheck ? " · ถูกรุก!" : "");
+      }
+      maybeEngineMove();
+      break;
+    case "legal": legal = m.moves; render(); break;
+    case "moved":
+      sanList.push(m.san || m.uci);
+      lastMove = { from: sqIdx(m.uci.slice(0, 2)), to: sqIdx(m.uci.slice(2, 4)) };
+      renderMoves(); post({ type: "eval" });
+      break;
+    case "info": showInfo(m); break;
+    case "bestmove": {
+      thinking = false; frameEl.classList.remove("is-thinking");
+      const kind = pendingGo; pendingGo = null;
+      if (m.serial !== goSerial) break;
+      if (kind === "hint") {
+        if (m.move) { selected = sqIdx(m.move.slice(0, 2)); render(); turnText.textContent = "แนะนำ: " + (m.san || m.move); }
+      } else if (m.move && !gameOver) {
+        post({ type: "domove", uci: m.move });
+      } else if (!m.move) {
+        turnText.textContent = "บอทไม่มีหมากเดิน";
+      }
+      break;
+    }
+    case "eval": setEval(m.cp); break;
+    case "error": engineStat.textContent = "ผิดพลาด: " + m.message; thinking = false; frameEl.classList.remove("is-thinking"); break;
+  }
+}
+
+function newGame() {
+  sanList = []; selected = -1; lastMove = null; gameOver = false;
+  pendingGo = null; goSerial++;
+  resultEl.textContent = "";
+  post({ type: "newgame" });
+  post({ type: "eval" });
+}
+
+function startGo(kind) {
+  pendingGo = kind; thinking = true; goSerial++;
+  frameEl.classList.add("is-thinking");
+  turnText.textContent = kind === "hint" ? "กำลังหาคำแนะนำ…" : "บอทกำลังคิด…";
+  const mt = +document.getElementById("time").value;
+  post({ type: "go", serial: goSerial, movetime: kind === "hint" ? Math.min(900, mt) : mt });
+}
+function maybeEngineMove() {
+  if (gameOver || thinking || pendingGo) return;
+  if (turn !== humanSide) startGo("engine");
+}
+
+function verdict(v) {
+  if (!v || !v.over) { gameOver = false; return; }
+  gameOver = true;
+  const TH = { checkmate:"รุกจน", stalemate:"อับ — เสมอ", threefold:"ตำแหน่งซ้ำ 3 ครั้ง — เสมอ",
+    "fifty-move":"50 ตาไม่คืบหน้า — เสมอ", counting:"ครบการนับ — เสมอ", "insufficient-material":"กำลังไม่พอ — เสมอ" };
+  const who = v.winner ? (v.winner === "white" ? " · ขาวชนะ" : " · ดำชนะ") : "";
+  resultEl.textContent = (TH[v.reason] || v.reason) + who;
+}
+
+// ---------- interaction ----------
+function onClick(idx) {
+  if (thinking || gameOver || turn !== humanSide) return;
+  const p = board64[idx];
+  if (selected === -1) { if (p && p.c === humanSide[0]) sel(idx); return; }
+  if (idx === selected) { selected = -1; render(); return; }
+  const u = sqName(selected) + sqName(idx);
+  const hit = legal.find((mv) => mv.startsWith(u));
+  if (hit) { selected = -1; post({ type: "domove", uci: hit }); turnText.textContent = "ตาบอท"; }
+  else if (p && p.c === humanSide[0]) sel(idx);
+  else { selected = -1; render(); }
+}
+function sel(i) { selected = i; render(); }
+
+// ---------- rendering ----------
+function parseFen(f) {
+  board64 = new Array(64).fill(null);
+  const rows = f.split(/\s+/)[0].split("/");
+  for (let i = 0; i < 8; i++) {
+    const rank = 7 - i; let file = 0;
+    for (const ch of rows[i]) {
+      if (ch >= "1" && ch <= "9") { file += +ch; continue; }
+      const low = ch.toLowerCase();
+      board64[rank * 8 + file] = { c: ch === low ? "b" : "w", t: CH[low] };
+      file++;
+    }
+  }
+}
+function findKing(s) { const w = s === "white" ? "w" : "b"; for (let i = 0; i < 64; i++){ const p = board64[i]; if (p && p.t === "K" && p.c === w) return i; } return -1; }
+function sqName(i) { return FILES[i & 7] + ((i >> 3) + 1); }
+function sqIdx(s) { return (s.charCodeAt(0) - 97) + (s.charCodeAt(1) - 49) * 8; }
+
+function render() {
+  const order = [];
+  for (let r = 7; r >= 0; r--) for (let f = 0; f < 8; f++) order.push(r * 8 + f);
+  const cells = flipped ? order.slice().reverse() : order;
+  const hints = selected >= 0
+    ? legal.filter((mv) => mv.slice(0, 2) === sqName(selected)).map((mv) => sqIdx(mv.slice(2, 4)))
+    : [];
+  const frag = document.createDocumentFragment();
+  for (const idx of cells) {
+    const f = idx & 7, r = idx >> 3;
+    const el = document.createElement("div");
+    el.className = "sq " + ((f + r) % 2 === 0 ? "d" : "l");
+    el.setAttribute("role", "gridcell");
+    if (idx === selected) el.classList.add("sel");
+    if (lastMove && (idx === lastMove.from || idx === lastMove.to)) el.classList.add("last");
+    if (idx === checkSq) el.classList.add("chk");
+    if (hints.includes(idx)) { el.classList.add("mv"); if (board64[idx]) el.classList.add("cap"); }
+    const edgeFile = flipped ? 7 : 0, edgeRank = flipped ? 7 : 0;
+    if (r === edgeRank) { const c = document.createElement("span"); c.className = "sq__co f"; c.textContent = FILES[f]; el.appendChild(c); }
+    if (f === edgeFile) { const c = document.createElement("span"); c.className = "sq__co r"; c.textContent = r + 1; el.appendChild(c); }
+    const p = board64[idx];
+    if (p) { const pe = document.createElement("div"); pe.className = "piece " + p.c; pe.textContent = GLYPH[p.t]; el.appendChild(pe); }
+    el.addEventListener("click", () => onClick(idx));
+    frag.appendChild(el);
+  }
+  boardEl.replaceChildren(frag);
+  turnChip.className = "chip " + (turn === "white" ? "w" : "b");
+}
+
+function renderMoves() {
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < sanList.length; i += 2) {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<span class="n">${i / 2 + 1}.</span><span>${sanList[i] || ""}</span><span>${sanList[i + 1] || ""}</span>`;
+    frag.appendChild(row);
+  }
+  movesEl.replaceChildren(frag);
+  movesEl.scrollTop = movesEl.scrollHeight;
+}
+function renderCount(c) {
+  if (c && c.active) { countPill.textContent = "⏱ " + c.text; countPill.classList.add("on"); }
+  else { countPill.textContent = "ยังไม่เริ่มนับ"; countPill.classList.remove("on"); }
+}
+function showInfo(m) {
+  const sc = m.scoreType === "mate" ? "รุกจน #" + Math.abs(m.mate) : (m.score / 100).toFixed(2);
+  turnText.textContent = (turn === "white" ? "ตาขาว" : "ตาดำ");
+  const pv = (m.pvSan && m.pvSan.length ? m.pvSan : (m.pv || [])).slice(0, 10).join(" ");
+  engineStat.innerHTML =
+    `ระดับลึก <b>${m.depth}</b> · แต้ม <b>${sc}</b><br>` +
+    `<b>${(m.nodes / 1000 | 0).toLocaleString()}k</b> ตำแหน่ง · <b>${(m.nps / 1000 | 0).toLocaleString()}k</b>/วิ` +
+    `<span class="pv">${pv}</span>`;
+  setEval(turn === "white" ? m.score : -m.score);
+}
+function setEval(cpWhite) {
+  const c = Math.max(-900, Math.min(900, cpWhite || 0));
+  evalWhite.style.height = (50 + c / 18) + "%";
+}
+
+// ---------- controls ----------
+document.getElementById("new").addEventListener("click", () => ready && newGame());
+document.getElementById("undo").addEventListener("click", () => {
+  if (!ready || thinking) return;
+  const back = Math.min(sanList.length, turn === humanSide ? 2 : 1);
+  if (!back) return;
+  for (let i = 0; i < back; i++) sanList.pop();
+  gameOver = false; resultEl.textContent = ""; lastMove = null;
+  post({ type: "undo", count: back }); post({ type: "eval" });
+});
+document.getElementById("flip").addEventListener("click", () => { flipped = !flipped; render(); });
+document.getElementById("hint").addEventListener("click", () => { if (ready && !thinking) startGo("hint"); });
+document.getElementById("gonow").addEventListener("click", () => { if (ready && !thinking && !gameOver) startGo("force"); });
+document.getElementById("side").addEventListener("click", () => {
+  humanSide = humanSide === "white" ? "black" : "white";
+  document.getElementById("side").textContent = "คุณเล่น: " + (humanSide === "white" ? "ขาว" : "ดำ");
+  flipped = humanSide === "black"; render(); maybeEngineMove();
+});
+const skillR = document.getElementById("skill");
+skillR.addEventListener("input", () => {
+  document.getElementById("skillVal").textContent = skillR.value;
+  if (ready) post({ type: "setoption", name: "Skill Level", value: +skillR.value });
+});
+const timeR = document.getElementById("time");
+timeR.addEventListener("input", () => { document.getElementById("timeVal").textContent = timeR.value; });
+
+// theme toggle (system → light → dark → system)
+const themeBtn = document.getElementById("themeBtn");
+let themeMode = "system";
+themeBtn.addEventListener("click", () => {
+  themeMode = themeMode === "system" ? "light" : themeMode === "light" ? "dark" : "system";
+  if (themeMode === "system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", themeMode);
+  themeBtn.textContent = themeMode === "system" ? "โหมด: ตามระบบ" : themeMode === "light" ? "โหมด: สว่าง" : "โหมด: มืด";
+});
+
+// formation reference
+const FORMATIONS = [
+  ["R","ม้าเทียมโคนขุนพล ม้าขวา","รูปมาตรฐานของ GodratSF+ พัฒนาม้าขวาขึ้นเทียบโคน"],
+  ["Fast","ม้าขวา (บุกเร็ว)","เหมือน R แต่ตั้งค่าให้พยายามบุกเร็ว"],
+  ["RR-white","ม้าขวา (เฉพาะหมากขาว)","ใช้รูปม้าขวาเมื่อเล่นฝ่ายขาว"],
+  ["RR-black","ม้าขวา (เฉพาะหมากดำ)","ใช้รูปม้าขวาเมื่อเล่นฝ่ายดำ"],
+  ["P-white","ม้าขวาเบี้ยก้ามปู (ขาว, เบี้ย h4)","รูปม้าขวา ผสมดันเบี้ยริม h4"],
+  ["P-black","ม้าขวาเบี้ยก้ามปู (ดำ, เบี้ย a5)","รูปม้าขวา ผสมดันเบี้ยริม a5"],
+  ["M","เม็ดซ้าย ม้าซ้าย","เล่นปีกซ้าย ดันเม็ดและพัฒนาม้าซ้าย"],
+  ["L","ม้าซ้าย เม็ดซ้าย","สลับลำดับกับ M ขึ้นม้าซ้ายก่อน"],
+  ["C","ม้าเทียมโคนผสม","ผสมแนวม้าเทียมโคนทั้งสองปีก"],
+  ["S","ม้ามังกร","พัฒนาม้าออกริมแล้ววกเข้าทำเกมรุก"],
+  ["H","ม้าลู่","จัดม้าทั้งสองให้อยู่แนวตั้งเดียวกัน"],
+  ["K","ม้าเทียมมังกรสลับ","สลับแนวม้าเทียม/ม้ามังกรตามคู่ต่อสู้"],
+  ["T","ม้าเทียมโคนขุนพลคู่","ฝ่ายดำขึ้นโคนเป็นภาพสะท้อนตรงข้ามขาว"],
+  ["N","ม้าอุปการ","วางม้าให้หนุนหมากกลางและคุมช่องสำคัญ"],
+  ["O","เรือมเหศวร","เปิดแถวเรือเร็ว เน้นเกมเรือคู่"],
+  ["MC","เม็ดซ้ายโคนนายผล","ผสมเม็ดซ้ายกับการวางโคนแบบนายผล"],
+  ["NM","ม้าอุปการ + เม็ดซ้าย","ผสมแนว N กับ M"],
+  ["NO","ม้าอุปการ + เรือมเหศวร","ผสมแนว N กับ O"],
+];
+document.getElementById("fgrid").innerHTML = FORMATIONS.map(
+  ([c, th, d]) => `<div class="fitem"><div class="code">${c}</div><div class="th">${th}</div><div class="desc">${d}</div></div>`
+).join("");
+</script>
+</body>
+</html>

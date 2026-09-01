@@ -69,14 +69,18 @@ w.postMessage({ type: 'domove', uci: 'f3f4' });
 w.postMessage({ type: 'go', movetime: 1000 });
 ```
 
-### 4) เดโมเล่นกับบอท
+### 4) เว็บหน้าเดียว (พร้อมใช้)
+
+`web/index.html` = หน้าเว็บสนามซ้อมแบบสมบูรณ์ (กระดาน + เอนจิ้นฝังในไฟล์ + Blob Worker
++ fallback รันบน main thread) เปิดได้ทันทีแม้ดับเบิลคลิก ไม่ต้องมีเซิร์ฟเวอร์
 
 ```bash
-npm run serve
-# เปิด  http://localhost:4180/examples/play.html
+npm run build          # สร้าง web/index.html จาก src/ + tools/standalone.template.html
+npm run serve          # หรือเปิด examples/play.html (ใช้ worker แยกไฟล์)
 ```
 
-> ต้องเปิดผ่านเว็บเซิร์ฟเวอร์ (ไม่ใช่ดับเบิลคลิกไฟล์) เพราะใช้ ES module + Web Worker
+เอาไปวางบนโฮสต์สแตติกไหนก็ได้ (GitHub Pages, Netlify, Cloudflare Pages ฯลฯ) — ก็อป `web/index.html`
+ไฟล์เดียวจบ
 
 ---
 
