@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>สนามซ้อมหมากรุกไทย</title>
-<meta name="description" content="กระดานหมากรุกไทยเล่นกับเอนจิ้น AI ปรับระดับได้ พร้อมกฎการนับและรูปแบบเปิดหมาก">
+<meta name="description" content="กระดานหมากรุกไทยเล่นกับเอนจิ้น AI (เต็มกำลัง Best Move) พร้อมกฎการนับและรูปแบบเปิดหมาก">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Trirong:ital,wght@0,500;0,600;1,500&family=Sarabun:wght@400;500;600;700&display=swap">
@@ -186,10 +186,7 @@
     outline:2px solid var(--focus); outline-offset:2px;
   }
 
-  .ctl { margin-top:12px; }
-  .ctl label { display:flex; justify-content:space-between; font-size:12.5px; color:var(--ink-soft); margin-bottom:4px; }
-  .ctl label b { color:var(--ink); font-variant-numeric:tabular-nums; }
-  input[type=range] { width:100%; accent-color:var(--accent); }
+  .hintline { margin:12px 0 0; font-size:12px; color:var(--ink-soft); }
 
   .stat { font-size:13px; line-height:1.85; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
   .stat b { color:var(--ink); }
@@ -275,14 +272,7 @@
         <button class="act" id="side" type="button">คุณเล่น: ขาว</button>
         <button class="act" id="gonow" type="button">ให้บอทเดิน</button>
       </div>
-      <div class="ctl">
-        <label>ระดับความเก่งของบอท <b id="skillVal">12</b></label>
-        <input type="range" id="skill" min="0" max="20" value="12" aria-label="ระดับความเก่ง">
-      </div>
-      <div class="ctl">
-        <label>เวลาคิดต่อตา <b><span id="timeVal">900</span> ms</b></label>
-        <input type="range" id="time" min="200" max="4000" step="100" value="900" aria-label="เวลาคิดต่อตา">
-      </div>
+      <p class="hintline">บอทเล่นเต็มกำลัง (Best Move) เสมอ</p>
     </div>
 
     <div class="card">
@@ -380,7 +370,7 @@ function onEngineMessage(m) {
     case "ready":
       ready = true; bootstrapped = true;
       post({ type: "loadbook", book: BOOK });
-      post({ type: "setoption", name: "Skill Level", value: +document.getElementById("skill").value });
+      // บอทเล่นเต็มกำลังเสมอ (เอนจิ้น default = Best Move) ไม่มีการปรับระดับ
       newGame();
       break;
     case "state":
@@ -428,12 +418,12 @@ function newGame() {
   post({ type: "eval" });
 }
 
+const MOVE_TIME = 1200;   // เวลาคิดต่อตา (คงที่)
 function startGo(kind) {
   pendingGo = kind; thinking = true; goSerial++;
   frameEl.classList.add("is-thinking");
   turnText.textContent = kind === "hint" ? "กำลังหาคำแนะนำ…" : "บอทกำลังคิด…";
-  const mt = +document.getElementById("time").value;
-  post({ type: "go", serial: goSerial, movetime: kind === "hint" ? Math.min(900, mt) : mt });
+  post({ type: "go", serial: goSerial, movetime: kind === "hint" ? 900 : MOVE_TIME });
 }
 function maybeEngineMove() {
   if (gameOver || thinking || pendingGo) return;
@@ -582,14 +572,6 @@ document.getElementById("side").addEventListener("click", () => {
   document.getElementById("side").textContent = "คุณเล่น: " + (humanSide === "white" ? "ขาว" : "ดำ");
   flipped = humanSide === "black"; render(); maybeEngineMove();
 });
-const skillR = document.getElementById("skill");
-skillR.addEventListener("input", () => {
-  document.getElementById("skillVal").textContent = skillR.value;
-  if (ready) post({ type: "setoption", name: "Skill Level", value: +skillR.value });
-});
-const timeR = document.getElementById("time");
-timeR.addEventListener("input", () => { document.getElementById("timeVal").textContent = timeR.value; });
-
 // theme toggle (system → light → dark → system)
 const themeBtn = document.getElementById("themeBtn");
 let themeMode = "system";
