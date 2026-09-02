@@ -165,7 +165,8 @@ if (existsSync(coiSrc)) {
 // _headers : ให้ Netlify / Cloudflare Pages เปิด cross-origin isolation เอง (ไม่ต้องพึ่ง SW)
 writeFileSync(join(ROOT, 'web/_headers'),
   '/*\n  Cross-Origin-Opener-Policy: same-origin\n  Cross-Origin-Embedder-Policy: credentialless\n');
-console.log('web/_headers  (Netlify / Cloudflare Pages)');
+writeFileSync(join(ROOT, 'web/.nojekyll'), '');   // กัน GitHub Pages ประมวลผลแบบ Jekyll
+console.log('web/_headers + web/.nojekyll');
 
 const fairyDir = join(ROOT, 'vendor/fairy');
 if (existsSync(fairyDir)) {
