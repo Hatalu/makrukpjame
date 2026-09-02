@@ -235,6 +235,63 @@
 
   .foot { grid-column:1/-1; max-width:1200px; margin:22px auto 0; font-size:11.5px; color:var(--ink-soft); text-align:center; }
   .foot a { color:var(--accent); }
+
+  /* ===== screens: login / home / kom-list / dev ===== */
+  .screen { position:fixed; inset:0; z-index:50; display:flex; align-items:flex-start; justify-content:center;
+    padding:clamp(24px,6vh,80px) 16px; overflow-y:auto; background:var(--ground); }
+  .panelbox { width:100%; max-width:420px; background:var(--surface); border:1px solid var(--line);
+    border-radius:14px; padding:28px 26px; box-shadow:0 20px 60px -20px var(--shadow); }
+  .panelbox.wide { max-width:920px; }
+  .panelbox h1 { font-size:22px; margin-bottom:4px; }
+  .panelbox .lead { font-size:13px; color:var(--ink-soft); margin-bottom:18px; }
+  .field { display:block; width:100%; font:inherit; font-size:15px; padding:11px 13px; margin-bottom:11px;
+    background:var(--surface-2); color:var(--ink); border:1px solid var(--line); border-radius:9px; }
+  .field:focus { outline:2px solid var(--focus); outline-offset:1px; }
+  .bigbtn { display:block; width:100%; font:inherit; font-size:15px; font-weight:600; padding:12px;
+    background:var(--accent); color:var(--accent-ink); border:0; border-radius:9px; cursor:pointer; margin-top:4px; }
+  .bigbtn.ghost { background:var(--surface-2); color:var(--ink); border:1px solid var(--line); }
+  .msg-err { color:var(--neg); font-size:13px; min-height:1.2em; margin-top:8px; }
+  .homecards { display:grid; gap:12px; margin:8px 0 16px; }
+  .homecard { text-align:left; font:inherit; cursor:pointer; padding:18px 20px; border-radius:11px;
+    border:1px solid var(--line); background:var(--surface-2); color:var(--ink); }
+  .homecard:hover { border-color:var(--brass); }
+  .homecard b { font-family:"Trirong",serif; font-size:19px; display:block; }
+  .homecard span { font-size:12.5px; color:var(--ink-soft); }
+  .homecard.dev b { color:var(--accent); }
+
+  .kom-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; }
+  .kom-item { border:1px solid var(--line); border-radius:10px; padding:12px; background:var(--surface-2); cursor:pointer; }
+  .kom-item:hover { border-color:var(--brass); }
+  .kom-item .knm { font-weight:600; font-size:13.5px; }
+  .kom-item .kst { font-size:11.5px; margin-top:4px; }
+  .kom-item .kst.pass { color:var(--pos); } .kom-item .kst.fail { color:var(--neg); } .kom-item .kst.none { color:var(--ink-soft); }
+
+  .kom-strip { grid-column:1 / -1; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-bottom:4px; }
+  .kom-strip .knm { font-family:"Trirong",serif; font-weight:600; font-size:16px; }
+  .kom-strip .kpill { font-size:12px; font-weight:600; padding:3px 10px; border-radius:999px; background:var(--surface-2); border:1px solid var(--line); }
+  .kom-strip .kpill.pass { color:var(--pos); border-color:color-mix(in srgb,var(--pos) 50%,var(--line)); }
+  .kom-strip .kpill.fail { color:var(--neg); border-color:color-mix(in srgb,var(--neg) 50%,var(--line)); }
+  .kom-strip .spacer { flex:1; }
+
+  .devtabs { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
+  .devtabs button { font:inherit; font-size:13px; padding:7px 12px; border:1px solid var(--line);
+    background:var(--surface-2); color:var(--ink-soft); border-radius:8px; cursor:pointer; }
+  .devtabs button.on { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  table.dev { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.dev th, table.dev td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
+  table.dev th { color:var(--ink-soft); font-weight:700; }
+  table.dev td.pass { color:var(--pos); } table.dev td.fail { color:var(--neg); }
+  .dev-list { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+  .dev-row { display:flex; gap:8px; align-items:center; font-size:12.5px; background:var(--surface-2);
+    border:1px solid var(--line); border-radius:8px; padding:7px 10px; }
+  .dev-row .spacer { flex:1; }
+  .dev-row button { font:inherit; font-size:12px; padding:4px 9px; border:1px solid var(--line);
+    background:var(--surface); border-radius:6px; cursor:pointer; }
+  .topbar .uchip { font-size:12px; color:var(--ink-soft); border:1px solid var(--line);
+    border-radius:999px; padding:4px 11px; }
+  .topbar .uchip b { color:var(--ink); }
+
   [hidden] { display:none !important; }
 </style>
 </head>
@@ -243,10 +300,73 @@
   <span class="brand">สนามซ้อม<span class="dot">หมากรุกไทย</span></span>
   <span class="kicker">Makruk Trainer</span>
   <span class="spacer"></span>
+  <span class="uchip" id="userChip" hidden></span>
+  <button class="theme-btn" id="homeBtn" type="button" hidden>เมนู</button>
   <button class="theme-btn" id="themeBtn" type="button">โหมด: ตามระบบ</button>
 </header>
 
-<main class="wrap">
+<!-- ===== login ===== -->
+<div class="screen" id="loginScreen">
+  <div class="panelbox">
+    <h1>เข้าสู่ระบบ</h1>
+    <p class="lead">ใส่รหัสประจำตัวและรหัสผ่านเพื่อเข้าใช้งาน</p>
+    <input class="field" id="loginId" placeholder="รหัสประจำตัว" autocomplete="username" inputmode="numeric">
+    <input class="field" id="loginPw" type="password" placeholder="รหัสผ่าน" autocomplete="current-password">
+    <button class="bigbtn" id="loginBtn" type="button">เข้าสู่ระบบ</button>
+    <p class="msg-err" id="loginMsg"></p>
+  </div>
+</div>
+
+<!-- ===== home ===== -->
+<div class="screen" id="homeScreen" hidden>
+  <div class="panelbox">
+    <h1>เลือกโหมด</h1>
+    <p class="lead" id="homeHi"></p>
+    <div class="homecards">
+      <button class="homecard" data-go="play" type="button"><b>เล่นปกติ</b><span>เล่นกับ AI / เล่น 2 คน / ตั้งหมาก + แนะนำตาเดิน</span></button>
+      <button class="homecard" data-go="kom" type="button"><b>หมากกล</b><span>แก้หมากกล — คุณเป็นฝ่ายขาว · เอนจิ้นแรงสุดเป็นฝ่ายดำ</span></button>
+      <button class="homecard dev" data-go="dev" type="button" hidden><b>ฟังก์ชัน Dev</b><span>สถิติผู้เล่น · ตั้งกระดานหมากกล · จัดการบัญชี</span></button>
+    </div>
+    <button class="bigbtn ghost" id="logoutBtn" type="button">ออกจากระบบ</button>
+  </div>
+</div>
+
+<!-- ===== kom list ===== -->
+<div class="screen" id="komScreen" hidden>
+  <div class="panelbox wide">
+    <button class="bigbtn ghost" data-go="home" type="button" style="width:auto;padding:8px 16px;margin-bottom:14px">← เมนู</button>
+    <h1>หมากกล</h1>
+    <p class="lead">แตะเพื่อเริ่มแก้ · คุณเดินฝ่ายขาว · เอนจิ้นแรงสุดเดินฝ่ายดำ · ผ่านเมื่อรุกจนฝ่ายดำ</p>
+    <div class="kom-grid" id="komGrid"></div>
+  </div>
+</div>
+
+<!-- ===== dev ===== -->
+<div class="screen" id="devScreen" hidden>
+  <div class="panelbox wide">
+    <button class="bigbtn ghost" data-go="home" type="button" style="width:auto;padding:8px 16px;margin-bottom:14px">← เมนู</button>
+    <h1>ฟังก์ชัน Dev</h1>
+    <div class="devtabs" id="devTabs">
+      <button data-tab="stats" class="on" type="button">สถิติผู้เล่น</button>
+      <button data-tab="puzzles" type="button">ตั้งกระดานหมากกล</button>
+      <button data-tab="accounts" type="button">จัดการบัญชี</button>
+    </div>
+    <div id="devStats"></div>
+    <div id="devPuzzles" hidden></div>
+    <div id="devAccounts" hidden></div>
+    <p class="lead" style="margin-top:14px">หมายเหตุ: รหัสผ่านอยู่ในหน้าเว็บ (เป็นแค่ประตูกั้น ไม่ใช่ความปลอดภัยจริง) · สถิติและหมากกลที่สร้างใหม่เก็บใน localStorage ของเบราว์เซอร์นี้ (ไม่ sync ข้ามเครื่อง) · จะให้ทุกคนเห็นหมากกลใหม่ ใช้ "คัดลอก JSON" แล้ว commit ลง web/puzzles.json</p>
+  </div>
+</div>
+
+<main class="wrap" hidden>
+  <div class="kom-strip" id="komStrip" hidden>
+    <button class="theme-btn" data-go="kom" type="button">← รายการ</button>
+    <span class="knm" id="komName"></span>
+    <span class="kpill" id="komMovePill">เดินไป 0 ตา</span>
+    <span class="kpill" id="komStatusPill">กำลังเล่น</span>
+    <span class="spacer"></span>
+    <button class="theme-btn" id="komRestart" type="button">เริ่มข้อนี้ใหม่</button>
+  </div>
   <!-- ===== board ===== -->
   <section class="col-board">
     <div class="board-stage">
@@ -480,6 +600,7 @@ function onEngineMessage(m) {
       renderCount(m.counting); render(); renderMoves(); verdict(m.gameOver); sizeBoard();
       post({ type:"legal" });
       updateTurnText(m.inCheck);
+      if (screen === "kom-play") renderKomStrip();
       maybeEngineMove();
       refreshSuggestions();
       break;
@@ -552,6 +673,7 @@ function verdict(v) {
     "fifty-move":"50 ตาไม่คืบหน้า — เสมอ", counting:"ครบการนับ — เสมอ", "insufficient-material":"กำลังไม่พอ — เสมอ" };
   const who = v.winner ? (v.winner==="white"?" · ขาวชนะ":" · ดำชนะ") : "";
   resultEl.textContent = (TH[v.reason]||v.reason) + who;
+  komVerdict(v);
 }
 
 /* ---------------- board interaction ---------------- */
@@ -667,6 +789,7 @@ const analysis = {
   cancel() { this.serial++; this.running = false; if (fsf.sf && fsf.mode === "analyze") { fsf.stop(); fsf.mode = null; } },
   clearUI(msg) { suggList.innerHTML = `<div class="sugg-meta">${msg||""}</div>`; suggMeta.textContent = ""; },
   shouldRun() {
+    if (screen !== "play" && screen !== "kom-play") return false;
     if (mode === "setup" || gameOver || thinking || pendingGo) return false;
     if (mode === "bot" && turn !== humanSide) return false;   // ตาบอท — ไม่ต้องแนะนำ
     return true;
@@ -827,7 +950,7 @@ $("modeSel").addEventListener("click", (e) => {
   $("setupControls").hidden = (mode !== "setup");
   document.querySelectorAll("[data-botmode]").forEach(x => x.hidden = (mode !== "bot"));
 
-  if (mode === "setup") { enterSetup(); return; }
+  if (mode === "setup") { devSaveMode = false; $("setupPlay").textContent = "เริ่มเล่นจากตำแหน่งนี้"; enterSetup(); return; }
   if (prev === "setup") {
     // ออกจากตั้งหมาก -> เริ่มเกมจากตำแหน่งที่ตั้ง (ถ้า valid) มิฉะนั้นคงเดิม
     if (!$("setupPlay").disabled) newGameFromFen(fenFromEdit());
@@ -837,7 +960,11 @@ $("modeSel").addEventListener("click", (e) => {
   updateTurnText(false);
 });
 
-$("new").addEventListener("click", () => { if (ready && mode !== "setup") newGame(); });
+$("new").addEventListener("click", () => {
+  if (!ready || mode === "setup") return;
+  if (screen === "kom-play" && activePuzzle) { openPuzzle(activePuzzle); return; }
+  newGame();
+});
 $("undo").addEventListener("click", () => {
   if (!ready || thinking || mode === "setup") return;
   const backTo = (mode === "2p") ? 1 : (turn === humanSide ? 2 : 1);
@@ -866,6 +993,23 @@ $("setupStart").addEventListener("click", () => { parseFen(START_FEN); editBoard
 $("setupPlay").addEventListener("click", () => {
   if ($("setupPlay").disabled) return;
   const fen = fenFromEdit();
+
+  if (devSaveMode) {
+    // บันทึกเป็นหมากกลใหม่ (ต้องเป็นฝ่ายขาวเดิน เพราะผู้เล่นเล่นขาวเสมอ)
+    if (editTurn !== "white") { $("setupMsg").textContent = "หมากกลต้องให้ฝ่ายขาวเดินก่อน — สลับฝ่ายเดินเป็นขาว"; $("setupMsg").className = "msg bad"; return; }
+    const name = prompt("ชื่อหมากกล", "หมากกล custom-" + (customPuzzles().length + 1));
+    if (!name) return;
+    const note = prompt("หมายเหตุ (ไม่ใส่ก็ได้)", "") || "";
+    const arr = customPuzzles();
+    arr.push({ id: "c" + Date.now().toString(36), name, fen, note });
+    saveCustomPuzzles(arr);
+    devSaveMode = false;
+    $("setupPlay").textContent = "เริ่มเล่นจากตำแหน่งนี้";
+    exitSetup();
+    showScreen("dev");
+    return;
+  }
+
   mode = (prevPlayMode || "bot"); exitSetup();
   [...$("modeSel").children].forEach(x => x.classList.toggle("on", x.dataset.mode === mode));
   $("playControls").hidden = false; $("setupControls").hidden = true;
@@ -925,6 +1069,233 @@ themeBtn.addEventListener("click", () => {
   else document.documentElement.setAttribute("data-theme", themeMode);
   themeBtn.textContent = themeMode==="system" ? "โหมด: ตามระบบ" : themeMode==="light" ? "โหมด: สว่าง" : "โหมด: มืด";
 });
+
+/* ================= LOGIN / ROLES / SCREENS ================= */
+const BUILTIN_ACCOUNTS = [{ id:"66121360201", pw:"211406", role:"dev" }];
+function extraAccounts() { try { return JSON.parse(localStorage.getItem("mk_accounts")||"[]"); } catch(e){ return []; } }
+function allAccounts() { return [...BUILTIN_ACCOUNTS, ...extraAccounts()]; }
+let session = null;            // { id, role }
+let screen = "login";         // login | home | play | kom | kom-play | dev
+
+function showScreen(s) {
+  screen = s;
+  $("loginScreen").hidden = (s !== "login");
+  $("homeScreen").hidden  = (s !== "home");
+  $("komScreen").hidden   = (s !== "kom");
+  $("devScreen").hidden   = (s !== "dev");
+  document.querySelector(".wrap").hidden = !(s === "play" || s === "kom-play");
+  $("komStrip").hidden = (s !== "kom-play");
+  $("userChip").hidden = !session;
+  $("homeBtn").hidden = !session || s === "login";
+  $("modeSel").style.display = (s === "kom-play") ? "none" : "";
+  if (s === "kom") renderKomGrid();
+  if (s === "dev") renderDev();
+  if (s === "play" || s === "kom-play") { sizeBoard(); refreshSuggestions(); }
+  if (s === "home") {
+    $("homeHi").textContent = "รหัส " + session.id + " · สิทธิ " + (session.role === "dev" ? "Dev" : "ธรรมดา");
+    document.querySelector('.homecard.dev').hidden = (session.role !== "dev");
+  }
+  window.scrollTo(0, 0);
+}
+function applySession() {
+  $("userChip").innerHTML = "รหัส <b>" + session.id + "</b> · " + (session.role === "dev" ? "Dev" : "ธรรมดา");
+}
+(function restoreSession() {
+  try { const s = JSON.parse(sessionStorage.getItem("mk_session")||"null"); if (s && s.id) session = s; } catch(e){}
+  if (session) { applySession(); showScreen("home"); }
+  else showScreen("login");
+})();
+
+$("loginBtn").addEventListener("click", () => {
+  const id = $("loginId").value.trim(), pw = $("loginPw").value;
+  const a = allAccounts().find(x => x.id === id && x.pw === pw);
+  if (!a) { $("loginMsg").textContent = "รหัสประจำตัวหรือรหัสผ่านไม่ถูกต้อง"; return; }
+  session = { id: a.id, role: a.role };
+  sessionStorage.setItem("mk_session", JSON.stringify(session));
+  $("loginPw").value = ""; $("loginMsg").textContent = "";
+  applySession(); showScreen("home");
+});
+$("loginPw").addEventListener("keydown", (e) => { if (e.key === "Enter") $("loginBtn").click(); });
+$("logoutBtn").addEventListener("click", () => {
+  session = null; sessionStorage.removeItem("mk_session");
+  $("loginId").value = ""; $("loginPw").value = "";
+  showScreen("login");
+});
+$("homeBtn").addEventListener("click", () => showScreen("home"));
+document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => {
+  const g = b.dataset.go;
+  if (g === "play")  { activePuzzle = null; exitKom(); showScreen("play"); }
+  else if (g === "kom")  { showScreen("kom"); }
+  else if (g === "dev")  { if (session && session.role === "dev") showScreen("dev"); }
+  else if (g === "home") { showScreen("home"); }
+}));
+
+/* ================= หมากกล (puzzles) ================= */
+const PUZZLES_BUILTIN = /*__PUZZLES__*/;
+function customPuzzles() { try { return JSON.parse(localStorage.getItem("mk_custom_puzzles")||"[]"); } catch(e){ return []; } }
+function saveCustomPuzzles(a) { localStorage.setItem("mk_custom_puzzles", JSON.stringify(a)); }
+function allPuzzles() { return [...PUZZLES_BUILTIN, ...customPuzzles()]; }
+function loadStats() { try { return JSON.parse(localStorage.getItem("mk_stats")||"{}"); } catch(e){ return {}; } }
+
+let activePuzzle = null, puzzleStatus = "playing";
+
+function renderKomGrid() {
+  const stats = (loadStats()[session ? session.id : ""] || {});
+  const frag = document.createDocumentFragment();
+  for (const p of allPuzzles()) {
+    const st = stats[p.id];
+    const cls = st ? (st.passed ? "pass" : "fail") : "none";
+    const txt = st ? (st.passed ? "ผ่านแล้ว ✓ · " + st.moves + " ตา" : "เคยเล่น " + st.moves + " ตา · ยังไม่ผ่าน") : "ยังไม่เล่น";
+    const div = document.createElement("div");
+    div.className = "kom-item";
+    div.innerHTML = `<div class="knm">${p.name}</div><div class="kst ${cls}">${txt}</div>`;
+    div.addEventListener("click", () => openPuzzle(p));
+    frag.appendChild(div);
+  }
+  $("komGrid").replaceChildren(frag);
+}
+function openPuzzle(p) {
+  activePuzzle = p; puzzleStatus = "playing";
+  humanSide = "white"; flipped = false;
+  setModeInternal("bot");
+  ensureStrongEngine();
+  newGameFromFen(p.fen);
+  showScreen("kom-play");
+  renderKomStrip();
+}
+function exitKom() { activePuzzle = null; }
+function komMoveCount() { return Math.ceil(uciHistory.length / 2); }   // ตาฝ่ายขาว (มนุษย์)
+function renderKomStrip() {
+  if (!activePuzzle) return;
+  $("komName").textContent = activePuzzle.name;
+  $("komMovePill").textContent = "เดินไป " + komMoveCount() + " ตา";
+  const sp = $("komStatusPill");
+  sp.className = "kpill" + (puzzleStatus === "passed" ? " pass" : puzzleStatus === "failed" ? " fail" : "");
+  sp.textContent = puzzleStatus === "passed" ? "ผ่าน ✓" : puzzleStatus === "failed" ? "ไม่ผ่าน" : "กำลังเล่น";
+}
+function komVerdict(v) {
+  if (!activePuzzle || screen !== "kom-play") return;
+  if (!v || !v.over) return;
+  puzzleStatus = (v.reason === "checkmate" && v.winner === "white") ? "passed" : "failed";
+  const s = loadStats(); const uid = session ? session.id : "guest";
+  s[uid] = s[uid] || {};
+  const prev = s[uid][activePuzzle.id] || {};
+  s[uid][activePuzzle.id] = { moves: komMoveCount(), status: puzzleStatus,
+    passed: !!prev.passed || puzzleStatus === "passed", ts: Date.now() };
+  localStorage.setItem("mk_stats", JSON.stringify(s));
+  renderKomStrip();
+}
+$("komRestart").addEventListener("click", () => { if (activePuzzle) openPuzzle(activePuzzle); });
+async function ensureStrongEngine() {
+  if (brain === "fsf" && fsf.sf) return;
+  if (!window.crossOriginIsolated) return;         // FSF ใช้ไม่ได้ -> ใช้ JS engine (แรงสุดเท่าที่มี)
+  const btn = [...document.querySelectorAll("[data-brain]")].find(b => b.dataset.brain === "fsf");
+  if (btn && !btn.disabled) btn.click();
+}
+function setModeInternal(m) {
+  mode = m;
+  $("playControls").hidden = (m === "setup");
+  $("setupControls").hidden = (m !== "setup");
+  document.querySelectorAll("[data-botmode]").forEach(x => x.hidden = true);   // ในหมากกลไม่ให้เปลี่ยนข้าง/สั่งบอทเดิน
+  [...$("modeSel").children].forEach(x => x.classList.toggle("on", x.dataset.mode === m));
+  $("modeSel").style.display = (screen === "kom-play") ? "none" : "";
+}
+
+/* ================= Dev panel ================= */
+$("devTabs").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-tab]"); if (!b) return;
+  [...$("devTabs").children].forEach(x => x.classList.toggle("on", x === b));
+  $("devStats").hidden = b.dataset.tab !== "stats";
+  $("devPuzzles").hidden = b.dataset.tab !== "puzzles";
+  $("devAccounts").hidden = b.dataset.tab !== "accounts";
+});
+function renderDev() { renderDevStats(); renderDevPuzzles(); renderDevAccounts(); }
+function renderDevStats() {
+  const stats = loadStats();
+  const uids = Object.keys(stats);
+  if (!uids.length) { $("devStats").innerHTML = "<p class='lead'>ยังไม่มีสถิติในเบราว์เซอร์นี้</p>"; return; }
+  const puzz = allPuzzles();
+  let html = "<table class='dev'><tr><th>รหัสผู้เล่น</th><th>หมากกล</th><th>ตาที่เดิน</th><th>สถานะ</th><th>ล่าสุด</th></tr>";
+  for (const uid of uids) {
+    const rec = stats[uid] || {};
+    for (const pid of Object.keys(rec)) {
+      const r = rec[pid];
+      const nm = (puzz.find(p => p.id === pid) || {}).name || pid;
+      const cls = r.passed ? "pass" : "fail";
+      html += `<tr><td>${uid}</td><td>${nm}</td><td>${r.moves}</td>` +
+              `<td class="${cls}">${r.passed ? "ผ่าน ✓" : "ยังไม่ผ่าน"}</td>` +
+              `<td>${new Date(r.ts).toLocaleString("th-TH")}</td></tr>`;
+    }
+  }
+  html += "</table>";
+  html += "<button class='bigbtn ghost' style='width:auto;padding:8px 16px;margin-top:12px' id='devClearStats' type='button'>ล้างสถิติทั้งหมด (เบราว์เซอร์นี้)</button>";
+  $("devStats").innerHTML = html;
+  $("devClearStats").addEventListener("click", () => { if (confirm("ล้างสถิติทั้งหมด?")) { localStorage.removeItem("mk_stats"); renderDevStats(); } });
+}
+function renderDevPuzzles() {
+  const custom = customPuzzles();
+  let html = "<p class='lead'>สร้างหมากกลใหม่: ไปหน้า \"เล่นปกติ\" → โหมด \"ตั้งหมาก\" จัดกระดาน แล้วกดปุ่ม <b>บันทึกเป็นหมากกล</b></p>";
+  html += "<button class='bigbtn ghost' style='width:auto;padding:8px 16px' id='devGoSetup' type='button'>ไปตั้งกระดานหมากกล</button>";
+  html += "<div class='dev-list' style='margin-top:12px'>";
+  html += "<div class='dev-row'><span>หมากกลในตัว (แก้ไม่ได้)</span><span class='spacer'></span><span>" + PUZZLES_BUILTIN.length + " ข้อ</span></div>";
+  custom.forEach((p, i) => {
+    html += `<div class="dev-row"><span><b>${p.name}</b> — ${p.fen.split(" ")[0].slice(0,26)}…</span><span class="spacer"></span>` +
+            `<button data-di="${i}" data-act="ren">เปลี่ยนชื่อ</button><button data-di="${i}" data-act="del">ลบ</button></div>`;
+  });
+  html += "</div>";
+  html += "<button class='bigbtn ghost' style='width:auto;padding:8px 16px;margin-top:12px' id='devCopyJson' type='button'>คัดลอก JSON หมากกลทั้งหมด</button>";
+  $("devPuzzles").innerHTML = html;
+  $("devGoSetup").addEventListener("click", () => { devSaveMode = true; activePuzzle = null; exitKom(); showScreen("play"); enterSetupMode(); });
+  $("devCopyJson").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(JSON.stringify(allPuzzles(), null, 1)); $("devCopyJson").textContent = "คัดลอกแล้ว ✓"; }
+    catch(e) { prompt("คัดลอก JSON นี้ไป commit ที่ web/puzzles.json", JSON.stringify(allPuzzles())); }
+  });
+  $("devPuzzles").querySelectorAll("button[data-di]").forEach(b => b.addEventListener("click", () => {
+    const arr = customPuzzles(); const i = +b.dataset.di;
+    if (b.dataset.act === "del") { arr.splice(i, 1); saveCustomPuzzles(arr); renderDevPuzzles(); }
+    else { const nn = prompt("ชื่อใหม่", arr[i].name); if (nn) { arr[i].name = nn; saveCustomPuzzles(arr); renderDevPuzzles(); } }
+  }));
+}
+function renderDevAccounts() {
+  const extra = extraAccounts();
+  let html = "<div class='dev-list'>";
+  html += "<div class='dev-row'><span><b>66121360201</b> · Dev (ในตัว)</span></div>";
+  extra.forEach((a, i) => {
+    html += `<div class="dev-row"><span><b>${a.id}</b> · ${a.role === "dev" ? "Dev" : "ธรรมดา"}</span><span class="spacer"></span>` +
+            `<button data-ai="${i}">ลบ</button></div>`;
+  });
+  html += "</div>";
+  html += "<div style='margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center'>" +
+    "<input class='field' id='naId' placeholder='รหัสประจำตัว' style='width:auto;flex:1;min-width:130px;margin:0'>" +
+    "<input class='field' id='naPw' placeholder='รหัสผ่าน' style='width:auto;flex:1;min-width:110px;margin:0'>" +
+    "<select class='field' id='naRole' style='width:auto;margin:0'><option value='user'>ธรรมดา</option><option value='dev'>Dev</option></select>" +
+    "<button class='bigbtn' id='naAdd' type='button' style='width:auto;padding:9px 16px'>เพิ่มบัญชี</button></div>";
+  $("devAccounts").innerHTML = html;
+  $("naAdd").addEventListener("click", () => {
+    const id = $("naId").value.trim(), pw = $("naPw").value, role = $("naRole").value;
+    if (!id || !pw) return;
+    if (allAccounts().some(a => a.id === id)) { alert("รหัสประจำตัวนี้มีแล้ว"); return; }
+    const arr = extraAccounts(); arr.push({ id, pw, role });
+    localStorage.setItem("mk_accounts", JSON.stringify(arr));
+    renderDevAccounts();
+  });
+  $("devAccounts").querySelectorAll("button[data-ai]").forEach(b => b.addEventListener("click", () => {
+    const arr = extraAccounts(); arr.splice(+b.dataset.ai, 1);
+    localStorage.setItem("mk_accounts", JSON.stringify(arr));
+    renderDevAccounts();
+  }));
+}
+
+/* Dev: บันทึกกระดานตั้งหมาก -> หมากกลใหม่ */
+let devSaveMode = false;
+function enterSetupMode() {
+  [...$("modeSel").children].forEach(x => x.classList.toggle("on", x.dataset.mode === "setup"));
+  prevPlayMode = "bot"; mode = "setup";
+  $("playControls").hidden = true; $("setupControls").hidden = false;
+  document.querySelectorAll("[data-botmode]").forEach(x => x.hidden = true);
+  $("setupPlay").textContent = devSaveMode ? "บันทึกเป็นหมากกล" : "เริ่มเล่นจากตำแหน่งนี้";
+  enterSetup();
+}
 
 /* ---------------- formations + legend ---------------- */
 const FORMATIONS = [

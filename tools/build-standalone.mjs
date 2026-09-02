@@ -5,7 +5,7 @@
 //
 //  รัน:  node tools/build-standalone.mjs
 // ============================================================================
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -169,14 +169,42 @@ for (const [k, f] of Object.entries(PIECE_FILES)) {
 }
 const pieceImgJson = JSON.stringify(pieceImg);
 
+// ---- หมากกล : ดูดไฟล์ .fen ในโฟลเดอร์ ../หมากรุกไทย/หมากกล/ เป็นชุดเริ่มต้น ----
+function collectFen(dir, out) {
+  let names = [];
+  try { names = readdirSync(dir); } catch { return; }
+  for (const nm of names.sort()) {
+    const p = join(dir, nm);
+    let st; try { st = statSync(p); } catch { continue; }
+    if (st.isDirectory()) collectFen(p, out);
+    else if (nm.toLowerCase().endsWith('.fen')) {
+      try {
+        const raw = readFileSync(p, 'utf8').trim().split('\n')[0].trim();
+        // .fen ในไฟล์ผู้ใช้เป็นรูปแบบ 4 ช่อง "... w 0 1" -> เติมให้ครบ 6 ช่อง
+        const parts = raw.split(/\s+/);
+        const fen = parts.length >= 6 ? raw
+          : `${parts[0]} ${parts[1] || 'w'} - - ${parts[2] || 0} ${parts[3] || 1}`;
+        const id = nm.replace(/\.fen$/i, '');
+        out.push({ id, name: 'หมากกล ' + id, fen, note: '' });
+      } catch {}
+    }
+  }
+}
+const PUZZLES = [];
+collectFen(join(ROOT, '..', 'หมากรุกไทย', 'หมากกล'), PUZZLES);
+console.log(`หมากกล เริ่มต้น: ${PUZZLES.length} ข้อ`);
+const puzzlesJson = JSON.stringify(PUZZLES);
+
 const template = readFileSync(join(ROOT, 'tools/standalone.template.html'), 'utf8');
 const html = template
   .replace('/*__ENGINE_WORKER_SOURCE__*/', () => JSON.stringify(engineWorkerSource))
   .replace('/*__BOOK_JSON__*/', () => bookJson)
-  .replace('/*__PIECE_IMAGES__*/', () => pieceImgJson);
+  .replace('/*__PIECE_IMAGES__*/', () => pieceImgJson)
+  .replace('/*__PUZZLES__*/', () => puzzlesJson);
 
 mkdirSync(join(ROOT, 'web'), { recursive: true });
 writeFileSync(join(ROOT, 'web/index.html'), html);
+writeFileSync(join(ROOT, 'web/puzzles.json'), JSON.stringify(PUZZLES, null, 1));  // ให้ Dev แก้/commit เพิ่มได้
 console.log(`web/index.html   (${(html.length / 1024).toFixed(0)} KB, engine bundle ${(engineWorkerSource.length / 1024).toFixed(0)} KB)`);
 
 // coi-serviceworker + Fairy-Stockfish : สำหรับสมอง "เต็มพลัง" บนโฮสต์สแตติก
