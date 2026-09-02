@@ -22,6 +22,8 @@
     --piece-dark:#33251a; --piece-dark-ink:#f2e3c2;
     --shadow:rgba(48,30,14,.28);
     --focus:#9e2b25;
+    /* กระดานไม้ — สีเดียวกันทุกช่อง คงที่ทั้งสองธีม */
+    --board-wood:#b5804e; --board-line:#66421f;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -88,70 +90,80 @@
     gap:clamp(18px,3vw,40px);
     padding:clamp(16px,3.5vw,38px) clamp(14px,4vw,40px) 48px;
     align-items:start; max-width:1180px; margin:0 auto;
+    --board-size:min(54vw, 56vh, 560px);   /* ค่าเริ่มต้น; JS ปรับให้พอดีคอลัมน์อีกที */
   }
-  @media (max-width:880px){ .wrap { grid-template-columns:minmax(0,1fr); } }
+  @media (max-width:940px){
+    .wrap { grid-template-columns:minmax(0,1fr); --board-size:min(90vw, 62vh); }
+  }
 
-  /* ============ board ============ */
-  .board-stage { display:flex; gap:14px; align-items:stretch; }
+  /* ============ board — ขนาดตายตัว 8x8 ช่องเท่ากันเป๊ะ ไม่ขยับเมื่อเดินหมาก ============ */
+  .board-stage { display:flex; gap:12px; align-items:flex-start; }
   .evalbar {
-    width:12px; flex:0 0 12px; align-self:stretch; border-radius:7px;
-    border:1px solid var(--frame-edge); overflow:hidden; position:relative;
-    background:var(--piece-dark);
+    flex:0 0 14px; width:14px; height:var(--board-size);
+    border-radius:7px; border:1px solid var(--frame-edge);
+    overflow:hidden; position:relative; background:var(--piece-dark);
   }
-  .evalbar__white { position:absolute; left:0; right:0; bottom:0; background:linear-gradient(var(--brass-bright),var(--brass));
-    transition:height .35s cubic-bezier(.4,0,.2,1); height:50%; }
-  .evalbar__mid { position:absolute; left:0; right:0; height:2px; background:var(--accent); opacity:.7; }
+  .evalbar__white { position:absolute; left:0; right:0; bottom:0; height:50%;
+    background:linear-gradient(var(--brass-bright),var(--brass));
+    transition:height .35s cubic-bezier(.4,0,.2,1); }
+  .evalbar__mid { position:absolute; left:0; right:0; top:50%; height:2px; background:var(--accent); opacity:.7; }
 
   .board-frame {
-    flex:1 1 auto; position:relative; padding:26px;
-    background:
-      linear-gradient(135deg,var(--frame),var(--frame-edge));
+    flex:0 0 auto; position:relative;
+    padding:clamp(12px,2.5vw,22px);
+    background:linear-gradient(135deg,var(--frame),var(--frame-edge));
     border-radius:8px;
     box-shadow:0 10px 30px -8px var(--shadow), inset 0 0 0 1px rgba(0,0,0,.25);
   }
   .board-frame::after {
-    content:""; position:absolute; inset:8px; border-radius:4px; pointer-events:none;
+    content:""; position:absolute; inset:7px; border-radius:4px; pointer-events:none;
     border:1px solid var(--brass); opacity:.35;
   }
   .board-frame.is-thinking::before {
-    content:""; position:absolute; inset:0; border-radius:8px; pointer-events:none;
+    content:""; position:absolute; inset:0; border-radius:8px; pointer-events:none; z-index:2;
     background:linear-gradient(115deg,transparent 40%,color-mix(in srgb,var(--brass-bright) 55%,transparent) 50%,transparent 60%);
     background-size:280% 100%; animation:shimmer 1.5s linear infinite;
   }
   @keyframes shimmer { from{ background-position:120% 0; } to{ background-position:-120% 0; } }
 
   .board {
-    display:grid; grid-template-columns:repeat(8,1fr); aspect-ratio:1;
-    width:100%; border:1px solid var(--frame-edge);
+    width:var(--board-size); height:var(--board-size);
+    display:grid;
+    grid-template-columns:repeat(8,1fr);
+    grid-template-rows:repeat(8,1fr);
+    gap:1px;
+    background:var(--board-line);           /* เส้นตารางโผล่ผ่าน gap */
+    outline:2px solid var(--board-line);
     touch-action:manipulation;
   }
-  .sq { position:relative; display:flex; align-items:center; justify-content:center; cursor:pointer; }
-  .sq.l { background:var(--sq-light); } .sq.d { background:var(--sq-dark); }
-  .sq__co { position:absolute; font-size:10px; font-weight:600; opacity:.5; }
-  .sq__co.f { right:3px; bottom:1px; } .sq__co.r { left:3px; top:1px; }
-  .sq.sel { box-shadow:inset 0 0 0 4px var(--accent); }
-  .sq.mv::after {
-    content:""; position:absolute; width:26%; height:26%; border-radius:50%;
-    background:color-mix(in srgb,var(--good) 70%,transparent);
+  .sq {
+    position:relative;
+    min-width:0; min-height:0;
+    background:var(--board-wood);           /* ไม้สีน้ำตาลเดียวกันทุกช่อง */
+    cursor:pointer;
   }
-  .sq.mv.cap::after { width:82%; height:82%; background:none;
-    border:5px solid color-mix(in srgb,var(--good) 60%,transparent); }
-  .sq.last { box-shadow:inset 0 0 0 4px color-mix(in srgb,var(--brass-bright) 75%,transparent); }
-  .sq.last.pulse { animation:pulse .5s ease-out; }
-  @keyframes pulse { 0%{ box-shadow:inset 0 0 0 4px var(--accent);} 100%{ box-shadow:inset 0 0 0 4px color-mix(in srgb,var(--brass-bright) 75%,transparent);} }
-  .sq.chk .piece { box-shadow:0 0 0 3px var(--accent), 0 3px 7px var(--shadow); }
+  .sq__co { position:absolute; font-size:10px; font-weight:700; line-height:1;
+    color:color-mix(in srgb,var(--board-line) 55%,#000); opacity:.65; pointer-events:none; }
+  .sq__co.f { right:3px; bottom:2px; } .sq__co.r { left:3px; top:2px; }
 
+  /* ตัวหมาก = รูป PNG โปร่งใส วางทับแบบ absolute จึงไม่กระทบขนาดช่องเลย */
   .piece {
-    width:78%; height:78%; border-radius:50%;
-    display:flex; align-items:center; justify-content:center;
-    font-size:min(6vw,42px); line-height:1;
-    box-shadow:0 3px 7px var(--shadow), inset 0 2px 3px rgba(255,255,255,.15), inset 0 -3px 6px rgba(0,0,0,.28);
-    user-select:none;
+    position:absolute; inset:7%;
+    background-position:center; background-repeat:no-repeat; background-size:contain;
+    filter:drop-shadow(0 2px 3px rgba(0,0,0,.4));
+    pointer-events:none; user-select:none;
   }
-  .piece.w { background:radial-gradient(circle at 38% 32%,color-mix(in srgb,var(--piece-light) 88%,#fff),var(--piece-light) 62%,color-mix(in srgb,var(--piece-light) 78%,#000));
-    color:var(--piece-light-ink); }
-  .piece.b { background:radial-gradient(circle at 38% 32%,color-mix(in srgb,var(--piece-dark) 82%,#fff 18%),var(--piece-dark) 60%,color-mix(in srgb,var(--piece-dark) 70%,#000));
-    color:var(--piece-dark-ink); }
+
+  .sq.sel  { box-shadow:inset 0 0 0 4px var(--accent); }
+  .sq.mv::after {
+    content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:28%; height:28%; border-radius:50%;
+    background:color-mix(in srgb,var(--good) 78%,transparent);
+  }
+  .sq.mv.cap::after { width:86%; height:86%; background:none;
+    border:5px solid color-mix(in srgb,var(--good) 62%,transparent); }
+  .sq.last { box-shadow:inset 0 0 0 4px color-mix(in srgb,var(--brass-bright) 78%,transparent); }
+  .sq.chk  { box-shadow:inset 0 0 0 4px var(--accent), inset 0 0 16px color-mix(in srgb,var(--accent) 45%,transparent); }
 
   /* ============ side panel ============ */
   .panel { display:flex; flex-direction:column; gap:16px; }
@@ -214,8 +226,10 @@
   .fitem .th { font-weight:600; font-size:13.5px; }
   .fitem .desc { font-size:12px; color:var(--ink-soft); margin-top:3px; }
 
-  .legend { display:flex; flex-wrap:wrap; gap:5px 14px; font-size:12px; color:var(--ink-soft); }
-  .legend span b { color:var(--ink); font-size:15px; margin-right:2px; }
+  .legend { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; font-size:12.5px; color:var(--ink-soft); margin-top:12px; }
+  .legend span { display:inline-flex; align-items:center; gap:5px; }
+  .legend img { width:22px; height:22px; object-fit:contain;
+    background:var(--board-wood); border-radius:5px; padding:1px; }
 
   .foot { grid-column:1/-1; max-width:1180px; margin:26px auto 0; font-size:12px; color:var(--ink-soft); text-align:center; }
   .foot a { color:var(--accent); }
@@ -240,11 +254,7 @@
         <div class="board" id="board" role="grid" aria-label="กระดานหมากรุกไทย"></div>
       </div>
     </div>
-    <p class="legend" style="margin-top:12px">
-      <span><b>♚</b>ขุน</span><span><b>♛</b>เม็ด</span><span><b>♜</b>เรือ</span>
-      <span><b>♞</b>ม้า</span><span><b>♝</b>โคน</span><span><b>♟</b>เบี้ย</span>
-      <span style="opacity:.7">· เบี้ยถึงแถวที่ 6 เลื่อนขั้นเป็นเม็ด</span>
-    </p>
+    <p class="legend" id="legend"></p>
   </section>
 
   <aside class="panel">
@@ -334,8 +344,11 @@ try {
 const post = (m) => engine.postMessage(m);
 
 const FILES = "abcdefgh";
-const GLYPH = { P:"♟", N:"♞", S:"♝", M:"♛", R:"♜", K:"♚" };
 const CH = { p:"P", n:"N", s:"S", m:"M", r:"R", k:"K" };
+// รูปตัวหมากจากโฟลเดอร์ design/ (ฝังเป็น data URI ตอน build) key = สี+ชนิด เช่น "wK","bP"
+// เบี้ยเลื่อนขั้นถูกแปลงเป็นเม็ดในเอนจิ้นอยู่แล้ว จึงใช้รูป "เม็ด" โดยอัตโนมัติ
+const PIECE_IMG = /*__PIECE_IMAGES__*/;
+const GLYPH = { P:"♟", N:"♞", S:"♝", M:"♛", R:"♜", K:"♚" };  // fallback ถ้าไม่มีรูป
 
 const boardEl = document.getElementById("board");
 const frameEl = document.getElementById("frame");
@@ -373,7 +386,7 @@ function onEngineMessage(m) {
     case "state":
       turn = m.turn; parseFen(m.fen);
       checkSq = m.inCheck ? findKing(turn) : -1;
-      renderCount(m.counting); render(); renderMoves(); verdict(m.gameOver);
+      renderCount(m.counting); render(); renderMoves(); verdict(m.gameOver); sizeBoard();
       post({ type: "legal" });
       if (!gameOver && !thinking && !pendingGo) {
         const yours = turn === humanSide;
@@ -450,6 +463,23 @@ function onClick(idx) {
 }
 function sel(i) { selected = i; render(); }
 
+// ---------- ปรับขนาดกระดานให้พอดีคอลัมน์ (กันล้น เมื่อมีแผงข้าง) ----------
+const wrapEl = document.querySelector(".wrap");
+function sizeBoard() {
+  const stage = boardEl.closest(".board-stage");
+  const col = stage && stage.parentElement;        // <section>
+  const avail = col ? col.clientWidth : 0;
+  if (!avail) return;                              // ยังไม่ layout / ซ่อนอยู่ -> ใช้ค่า CSS
+  const pad = parseFloat(getComputedStyle(frameEl).paddingLeft) || 16;
+  const px = Math.max(200, Math.min(560, Math.floor(avail - 14 /*evalbar*/ - 12 /*gap*/ - pad * 2)));
+  wrapEl.style.setProperty("--board-size", px + "px");
+}
+window.addEventListener("resize", sizeBoard);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizeBoard);
+requestAnimationFrame(sizeBoard);
+setTimeout(sizeBoard, 120);
+setTimeout(sizeBoard, 600);
+
 // ---------- rendering ----------
 function parseFen(f) {
   board64 = new Array(64).fill(null);
@@ -479,7 +509,7 @@ function render() {
   for (const idx of cells) {
     const f = idx & 7, r = idx >> 3;
     const el = document.createElement("div");
-    el.className = "sq " + ((f + r) % 2 === 0 ? "d" : "l");
+    el.className = "sq";
     el.setAttribute("role", "gridcell");
     if (idx === selected) el.classList.add("sel");
     if (lastMove && (idx === lastMove.from || idx === lastMove.to)) el.classList.add("last");
@@ -489,7 +519,14 @@ function render() {
     if (r === edgeRank) { const c = document.createElement("span"); c.className = "sq__co f"; c.textContent = FILES[f]; el.appendChild(c); }
     if (f === edgeFile) { const c = document.createElement("span"); c.className = "sq__co r"; c.textContent = r + 1; el.appendChild(c); }
     const p = board64[idx];
-    if (p) { const pe = document.createElement("div"); pe.className = "piece " + p.c; pe.textContent = GLYPH[p.t]; el.appendChild(pe); }
+    if (p) {
+      const pe = document.createElement("div");
+      pe.className = "piece";
+      const src = PIECE_IMG[p.c + p.t];
+      if (src) pe.style.backgroundImage = 'url("' + src + '")';
+      else { pe.textContent = GLYPH[p.t]; pe.style.cssText += ';display:flex;align-items:center;justify-content:center;font-size:min(6vw,40px);color:' + (p.c === "w" ? "#f0e2c1" : "#2b2013"); }
+      el.appendChild(pe);
+    }
     el.addEventListener("click", () => onClick(idx));
     frag.appendChild(el);
   }
@@ -587,6 +624,15 @@ const FORMATIONS = [
 document.getElementById("fgrid").innerHTML = FORMATIONS.map(
   ([c, th, d]) => `<div class="fitem"><div class="code">${c}</div><div class="th">${th}</div><div class="desc">${d}</div></div>`
 ).join("");
+
+// legend — ใช้รูปตัวหมากจริงจากโฟลเดอร์ design/
+(() => {
+  const items = [["wK","ขุน"],["wM","เม็ด"],["wR","เรือ"],["wN","ม้า"],["wS","โคน"],["wP","เบี้ย"]];
+  const el = document.getElementById("legend");
+  el.innerHTML = items.map(([k, name]) =>
+    PIECE_IMG[k] ? `<span><img alt="${name}" src="${PIECE_IMG[k]}">${name}</span>` : `<span>${name}</span>`
+  ).join("") + `<span style="opacity:.7">· เบี้ยถึงแถวที่ 6 หงายเป็นเม็ด</span>`;
+})();
 </script>
 </body>
 </html>

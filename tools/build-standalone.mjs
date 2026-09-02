@@ -125,10 +125,30 @@ const engineWorkerSource = bundle + WORKER_GLUE;
 let bookJson = '{}';
 try { bookJson = readFileSync(join(ROOT, 'data/book.godratsf.json'), 'utf8'); } catch {}
 
+// รูปตัวหมากจากโฟลเดอร์ design/ -> ฝังเป็น data URI  (key = สี+ชนิด: wK,wM,wR,wN,wS,wP,bK,...)
+const PIECE_FILES = {
+  wK: 'ขุนขาว.png',  bK: 'ขุนดำ.png',
+  wM: 'เม็ดขาว.png', bM: 'เม็ดดำ.png',
+  wR: 'เรือขาว.png', bR: 'เรือดำ.png',
+  wN: 'ม้าขาว.png',  bN: 'ม้าดำ.png',
+  wS: 'โคนขาว.png',  bS: 'โคนดำ.png',
+  wP: 'เบี้ยคว่ำขาว.png', bP: 'เบี้ยคว่ำดำ.png',
+};
+const pieceImg = {};
+for (const [k, f] of Object.entries(PIECE_FILES)) {
+  try {
+    pieceImg[k] = 'data:image/png;base64,' + readFileSync(join(ROOT, 'design', f)).toString('base64');
+  } catch (e) {
+    console.warn(`  ! หา design/${f} ไม่เจอ — จะ fallback เป็นตัวอักษร`);
+  }
+}
+const pieceImgJson = JSON.stringify(pieceImg);
+
 const template = readFileSync(join(ROOT, 'tools/standalone.template.html'), 'utf8');
 const html = template
   .replace('/*__ENGINE_WORKER_SOURCE__*/', () => JSON.stringify(engineWorkerSource))
-  .replace('/*__BOOK_JSON__*/', () => bookJson);
+  .replace('/*__BOOK_JSON__*/', () => bookJson)
+  .replace('/*__PIECE_IMAGES__*/', () => pieceImgJson);
 
 mkdirSync(join(ROOT, 'web'), { recursive: true });
 writeFileSync(join(ROOT, 'web/index.html'), html);

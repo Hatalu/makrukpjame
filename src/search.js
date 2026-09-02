@@ -22,6 +22,14 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
 
 const FLAG_NONE = 0, FLAG_EXACT = 1, FLAG_LOWER = 2, FLAG_UPPER = 3;
 
+// ---- ตารางระดับความเก่ง (Skill 0..20) ----------------------------------
+//  ยิ่งต่ำ = ค้นหาตื้น + สุ่มพลาดบ่อย + ใช้เวลาน้อย   ยิ่งสูง = เต็มกำลัง
+const SKILL_DEPTH  = [1, 1, 2, 2, 3, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 20, 26, 40, 64, 99];
+const SKILL_BLUNDER = [0.62, 0.54, 0.47, 0.40, 0.34, 0.28, 0.23, 0.18, 0.14, 0.10, 0.07,
+                       0.05, 0.03, 0.018, 0.010, 0.004, 0, 0, 0, 0, 0];
+const SKILL_TIMEFRAC = [0.20, 0.24, 0.28, 0.33, 0.38, 0.44, 0.50, 0.57, 0.64, 0.72, 0.80,
+                        0.86, 0.91, 0.95, 0.98, 1, 1, 1, 1, 1, 1];
+
 const packMove = (m) => (m.from | (m.to << 6) | ((m.promotion ? 1 : 0) << 12));
 
 export class Search {
@@ -32,8 +40,11 @@ export class Search {
     this.killers = new Int32Array(MAX_PLY * 2);
     this._pv = [];
     this.resize(hashMb);
-    this._rng = 0x2545f491 >>> 0;
+    // seed แบบสุ่มต่อ instance เพื่อให้บอทไม่เดินซ้ำเดิมทุกเกม (override ได้ด้วย setSeed)
+    this._rng = (((Date.now() >>> 0) ^ 0x2545f491) >>> 0) || 0x2545f491;
   }
+
+  setSeed(n) { this._rng = (n >>> 0) || 0x2545f491; }
 
   // -------------------------------------------------------- transposition
   resize(mb) {
@@ -77,19 +88,22 @@ export class Search {
     this.nodes = 0;
     this.stopped = false;
     this.startTime = now();
-    this.deadline = limits.movetime ? this.startTime + limits.movetime : Infinity;
+    const sk = Math.max(0, Math.min(20, this.skill | 0));
+    const timeFrac = sk >= 20 ? 1 : SKILL_TIMEFRAC[sk];
+    this.deadline = limits.movetime ? this.startTime + limits.movetime * timeFrac : Infinity;
     this.nodeLimit = limits.nodes || Infinity;
     this.history.fill(0);
     this.killers.fill(0);
     this.generation = (this.generation + 1) & 0xff;
     this.rootScores = [];
+    this.rootScoresDone = null;
 
     const rootMoves = this._legalRoot();
     if (rootMoves.length === 0) {
       return { bestMove: null, move: null, score: 0, depth: 0, pv: [], nodes: 0, nps: 0 };
     }
 
-    const skillMaxDepth = this.skill >= 20 ? 99 : Math.max(2, this.skill + 2);
+    const skillMaxDepth = sk >= 20 ? 99 : SKILL_DEPTH[sk];
     const maxDepth = Math.min(limits.depth || 64, skillMaxDepth, MAX_PLY - 2);
     const totalTime = this.deadline === Infinity ? Infinity : this.deadline - this.startTime;
 
@@ -122,6 +136,7 @@ export class Search {
       if (this.stopped && d > 1) break;
 
       if (this.rootBest) { best = this.rootBest; bestScore = score; }
+      if (this.rootScores.length) this.rootScoresDone = this.rootScores.slice();
       completedDepth = d;
       lastPv = this._extractPv(best, d);
 
@@ -154,7 +169,7 @@ export class Search {
     }
 
     let chosen = best;
-    if (this.skill < 20) chosen = this._applySkill(best, bestScore) || best;
+    if (sk < 20) chosen = this._applySkill(best, sk, bestScore) || best;
 
     const t = now() - this.startTime;
     return {
@@ -478,14 +493,38 @@ export class Search {
     return pv.length ? pv : (firstMove ? [firstMove] : []);
   }
 
-  _applySkill(best, bestScore) {
-    if (!this.rootScores || this.rootScores.length <= 1) return best;
-    let top = -INF;
-    for (const r of this.rootScores) if (r.score > top) top = r.score;
-    const margin = (20 - this.skill) * 12 + 12;
-    const pool = this.rootScores.filter((r) => r.score >= top - margin);
+  /**
+   * ปรับหมากที่จะเดินตามระดับความเก่ง (เรียกเมื่อ sk < 20)
+   *  - โอกาส "พลาด" : สุ่มหมากจากครึ่งที่แย่กว่า (ยิ่ง skill ต่ำยิ่งบ่อย)
+   *  - ปกติ         : สุ่มแบบถ่วงน้ำหนักจากกลุ่มหมากที่ใกล้เคียงหมากดีที่สุด
+   *  (ใช้ร่วมกับการจำกัดความลึก/เวลาใน think() ซึ่งเป็นตัวหลักที่ทำให้อ่อนลง)
+   */
+  _applySkill(best, sk, bestScore) {
+    const rs = this.rootScoresDone && this.rootScoresDone.length ? this.rootScoresDone : this.rootScores;
+    if (!rs || rs.length <= 1) return best;
+
+    const sorted = rs.slice().sort((a, c) => c.score - a.score);
+    const top = sorted[0].score;
+
+    // ห้ามพลาดถ้ากำลังจะโดนรุกจน / หรือมีทางรุกจนอยู่ในมือ
+    const nearMate = Math.abs(top) >= MATE_IN_MAX || Math.abs(bestScore) >= MATE_IN_MAX;
+
+    // 1) โอกาสเล่นพลาด
+    const blunder = sk < SKILL_BLUNDER.length ? SKILL_BLUNDER[sk] : 0;
+    if (!nearMate && blunder > 0 && this._rand() < blunder && sorted.length >= 2) {
+      // เลือกจากครึ่งล่าง (แต่ไม่เอาหมากที่แย่หนักจนโดนรุกจนทันที ถ้าเลี่ยงได้)
+      const start = Math.max(1, Math.floor(sorted.length / 2));
+      const tail = sorted.slice(start).filter((r) => r.score > -MATE_IN_MAX);
+      const bag = tail.length ? tail : sorted.slice(1);
+      return bag[(this._rand() * bag.length) | 0].move;
+    }
+
+    // 2) สุ่มถ่วงน้ำหนักจากกลุ่มใกล้หมากดีที่สุด (คมที่ระดับสูง กว้างที่ระดับต่ำ)
+    const g = 20 - sk;
+    const margin = Math.pow(g, 1.6) * 3 + 8;            // cp: sk19≈11 · sk12≈95 · sk4≈280
+    const pool = sorted.filter((r) => r.score >= top - margin);
     if (pool.length <= 1) return best;
-    const temp = 45 + (20 - this.skill) * 10;
+    const temp = Math.pow(g, 1.5) * 4 + 18;
     const weights = pool.map((r) => Math.exp((r.score - top) / temp));
     const sum = weights.reduce((a, c) => a + c, 0);
     let pick = this._rand() * sum;
