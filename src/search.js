@@ -10,17 +10,82 @@
 // ============================================================================
 import {
   WHITE, BLACK, EMPTY, PAWN, KNIGHT, KHON, MET, ROOK, KING,
-  mk, pcType, pcColor, PIECE_VALUE,
+  mk, pcType, pcColor, PIECE_VALUE, PROMO_RANK, rankOf,
   MATE, MATE_IN_MAX, INF, DRAW_SCORE, MAX_PLY,
 } from './constants.js';
 import { generateMoves } from './movegen.js';
-import { squareAttackedBy } from './tables.js';
+import {
+  squareAttackedBy, KNIGHT_MOVES, KING_MOVES, MET_MOVES,
+  KHON_ATK_FROM, PAWN_ATK_FROM, ROOK_RAYS,
+} from './tables.js';
 import { evaluate, insufficientMaterial } from './evaluate.js';
 import { countingResult } from './counting.js';
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 const FLAG_NONE = 0, FLAG_EXACT = 1, FLAG_LOWER = 2, FLAG_UPPER = 3;
+
+// ค่าหมากสำหรับ SEE (index by type)
+const SEE_VAL = [0, 100, 315, 255, 190, 510, 20000];
+const _seeOcc = new Uint8Array(64);
+const _seeGain = new Int32Array(40);
+
+/**
+ * SEE - static exchange evaluation บนช่อง m.to (มุมมองฝ่ายที่เดิน m)
+ * ใช้เฉพาะกับหมากกินตัว  คืนผลได้-เสียสุทธิ (centipawn)
+ */
+function see(bd, m) {
+  const to = m.to, from = m.from;
+  let side = pcColor(bd[from]) ^ 1;
+  for (let i = 0; i < 64; i++) _seeOcc[i] = bd[i] !== EMPTY ? 1 : 0;
+  _seeOcc[from] = 0;
+
+  let d = 0;
+  _seeGain[0] = m.captured !== EMPTY ? SEE_VAL[pcType(m.captured)] : 0;
+  if (m.promotion) _seeGain[0] += SEE_VAL[MET] - SEE_VAL[PAWN];
+
+  const fromType = pcType(bd[from]);
+  let atkVal = (m.promotion && fromType === PAWN) ? SEE_VAL[MET] : SEE_VAL[fromType];
+
+  for (;;) {
+    const aSq = seeLeastAttacker(bd, to, side);
+    if (aSq < 0) break;
+    d++;
+    _seeGain[d] = atkVal - _seeGain[d - 1];
+    if (Math.max(-_seeGain[d - 1], _seeGain[d]) < 0) break;
+    const t2 = pcType(bd[aSq]);
+    atkVal = (t2 === PAWN && rankOf(to) === PROMO_RANK[side]) ? SEE_VAL[MET] : SEE_VAL[t2];
+    _seeOcc[aSq] = 0;
+    side ^= 1;
+  }
+  while (--d > 0) _seeGain[d - 1] = -Math.max(-_seeGain[d - 1], _seeGain[d]);
+  return _seeGain[0];
+}
+
+/** square ของหมากฝ่าย side ที่ถูกที่สุดซึ่งจู่โจม `to` ตาม _seeOcc ปัจจุบัน (หรือ -1) */
+function seeLeastAttacker(bd, to, side) {
+  const pf = PAWN_ATK_FROM[side][to], pc = mk(side, PAWN);
+  for (let i = 0; i < pf.length; i++) if (_seeOcc[pf[i]] && bd[pf[i]] === pc) return pf[i];
+  const nm = KNIGHT_MOVES[to], nc = mk(side, KNIGHT);
+  for (let i = 0; i < nm.length; i++) if (_seeOcc[nm[i]] && bd[nm[i]] === nc) return nm[i];
+  const sm = KHON_ATK_FROM[side][to], sc = mk(side, KHON);
+  for (let i = 0; i < sm.length; i++) if (_seeOcc[sm[i]] && bd[sm[i]] === sc) return sm[i];
+  const mm = MET_MOVES[to], mc = mk(side, MET);
+  for (let i = 0; i < mm.length; i++) if (_seeOcc[mm[i]] && bd[mm[i]] === mc) return mm[i];
+  const rays = ROOK_RAYS[to], rc = mk(side, ROOK);
+  for (let dd = 0; dd < 4; dd++) {
+    const ray = rays[dd];
+    for (let i = 0; i < ray.length; i++) {
+      const q = ray[i];
+      if (!_seeOcc[q]) continue;
+      if (bd[q] === rc) return q;
+      break;
+    }
+  }
+  const km = KING_MOVES[to], kc = mk(side, KING);
+  for (let i = 0; i < km.length; i++) if (_seeOcc[km[i]] && bd[km[i]] === kc) return km[i];
+  return -1;
+}
 
 // ---- ตารางระดับความเก่ง (Skill 0..20) ----------------------------------
 //  ยิ่งต่ำ = ค้นหาตื้น + สุ่มพลาดบ่อย + ใช้เวลาน้อย   ยิ่งสูง = เต็มกำลัง
@@ -399,6 +464,8 @@ export class Search {
       const m = moves[i];
 
       if (!inChk) {
+        // ข้ามการกินตัวที่ SEE ติดลบ (แลกแล้วเสียเปล่า)
+        if (m.captured !== EMPTY && !m.promotion && see(b.board, m) < 0) continue;
         // delta pruning
         const gain = m.captured !== EMPTY ? PIECE_VALUE[pcType(m.captured)] : 0;
         const promoGain = m.promotion ? PIECE_VALUE[MET] - PIECE_VALUE[PAWN] : 0;
@@ -426,19 +493,22 @@ export class Search {
   }
 
   // ------------------------------------------------------------- ordering
+  //  TT > กินตัวชนะ(SEE>=0, MVV-LVA) > เลื่อนขั้น > killers > history(quiet) > กินตัวเสีย(SEE<0)
   _order(moves, ttMove, ply) {
     const k0 = this.killers[ply * 2], k1 = this.killers[ply * 2 + 1];
+    const bd = this.board.board;
     for (let i = 0; i < moves.length; i++) {
       const m = moves[i];
       const pm = packMove(m);
       let sc;
-      if (pm === ttMove) sc = 2_000_000;
+      if (pm === ttMove) sc = 3_000_000;
       else if (m.captured !== EMPTY) {
-        sc = 1_000_000 + 16 * PIECE_VALUE[pcType(m.captured)] - PIECE_VALUE[pcType(m.piece)];
-        if (m.promotion) sc += 300_000;
-      } else if (m.promotion) sc = 900_000;
-      else if (pm === k0) sc = 800_000;
-      else if (pm === k1) sc = 790_000;
+        const mvv = 16 * PIECE_VALUE[pcType(m.captured)] - PIECE_VALUE[pcType(m.piece)];
+        const good = see(bd, m) >= 0;
+        sc = (good ? 2_000_000 : 100_000) + mvv + (m.promotion ? 500_000 : 0);
+      } else if (m.promotion) sc = 1_900_000;
+      else if (pm === k0) sc = 1_800_000;
+      else if (pm === k1) sc = 1_790_000;
       else sc = this.history[(m.piece << 6) + m.to] | 0;
       m.score = sc;
     }

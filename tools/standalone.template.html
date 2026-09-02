@@ -141,18 +141,26 @@
     min-width:0; min-height:0;
     background:var(--board-wood);           /* ไม้สีน้ำตาลเดียวกันทุกช่อง */
     cursor:pointer;
+    overflow:hidden;                        /* กันหมากตัวใหญ่ล้นออกนอกช่อง */
   }
-  .sq__co { position:absolute; font-size:10px; font-weight:700; line-height:1;
+  .sq__co { position:absolute; font-size:10px; font-weight:700; line-height:1; z-index:2;
     color:color-mix(in srgb,var(--board-line) 55%,#000); opacity:.65; pointer-events:none; }
   .sq__co.f { right:3px; bottom:2px; } .sq__co.r { left:3px; top:2px; }
 
-  /* ตัวหมาก = รูป PNG โปร่งใส วางทับแบบ absolute จึงไม่กระทบขนาดช่องเลย */
+  /* ตัวหมาก = รูป PNG โปร่งใส วางทับแบบ absolute จึงไม่กระทบขนาดช่องเลย
+     --pscale = ตัวคูณขนาดต่อชนิดหมาก (เรือใหญ่สุด, โคนรองลงมา) ถูก clip ที่ขอบช่อง */
   .piece {
-    position:absolute; inset:7%;
+    position:absolute; inset:8%;
     background-position:center; background-repeat:no-repeat; background-size:contain;
+    transform:scale(var(--pscale, 1)); transform-origin:center;
     filter:drop-shadow(0 2px 3px rgba(0,0,0,.4));
     pointer-events:none; user-select:none;
   }
+  .piece.t-r { --pscale:1.85; background-position:center 44%; }  /* เรือ  ~2 เท่า (อาร์ตแบนกว้าง) */
+  .piece.t-s { --pscale:1.45; }   /* โคน  ~1.5 เท่า */
+  .piece.t-m { --pscale:1.4; }    /* เม็ด  (อาร์ตมีขอบว่างเยอะ ขยายให้เห็นชัด) */
+  .piece.t-n { --pscale:1.05; }   /* ม้า */
+  .piece.t-k { --pscale:1.08; }   /* ขุน */
 
   .sq.sel  { box-shadow:inset 0 0 0 4px var(--accent); }
   .sq.mv::after {
@@ -418,7 +426,7 @@ function newGame() {
   post({ type: "eval" });
 }
 
-const MOVE_TIME = 1200;   // เวลาคิดต่อตา (คงที่)
+const MOVE_TIME = 1800;   // เวลาคิดต่อตา (คงที่) — ให้บอทคิดลึกขึ้น
 function startGo(kind) {
   pendingGo = kind; thinking = true; goSerial++;
   frameEl.classList.add("is-thinking");
@@ -511,7 +519,7 @@ function render() {
     const p = board64[idx];
     if (p) {
       const pe = document.createElement("div");
-      pe.className = "piece";
+      pe.className = "piece t-" + p.t.toLowerCase();
       const src = PIECE_IMG[p.c + p.t];
       if (src) pe.style.backgroundImage = 'url("' + src + '")';
       else { pe.textContent = GLYPH[p.t]; pe.style.cssText += ';display:flex;align-items:center;justify-content:center;font-size:min(6vw,40px);color:' + (p.c === "w" ? "#f0e2c1" : "#2b2013"); }

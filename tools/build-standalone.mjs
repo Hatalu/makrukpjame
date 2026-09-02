@@ -46,7 +46,7 @@ for (const f of ORDER) {
 // glue สำหรับรันใน Worker (โปรโตคอลเดียวกับ worker/engine.worker.js)
 const WORKER_GLUE = `
 /* ==== worker glue ==== */
-const engine = new MakrukEngine();
+const engine = new MakrukEngine({ hash: 64 });
 let busy = false;
 function postState() {
   self.postMessage({ type:'state', fen:engine.fen(), turn:engine.turnName(), ply:engine.ply(),
