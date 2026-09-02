@@ -18,6 +18,8 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
+  '.wasm': 'application/wasm',
+  '.png': 'image/png',
 };
 
 createServer(async (req, res) => {
@@ -30,6 +32,10 @@ createServer(async (req, res) => {
     res.writeHead(200, {
       'Content-Type': MIME[extname(full)] || 'application/octet-stream',
       'Cache-Control': 'no-cache',
+      // เปิด cross-origin isolation เพื่อทดสอบ Fairy-Stockfish WASM (SharedArrayBuffer)
+      // ใช้ credentialless เพื่อให้ Google Fonts / jsDelivr โหลดได้โดยไม่ต้องมี CORP
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
     });
     res.end(body);
   } catch {

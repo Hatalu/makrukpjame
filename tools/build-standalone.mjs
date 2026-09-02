@@ -5,7 +5,7 @@
 //
 //  รัน:  node tools/build-standalone.mjs
 // ============================================================================
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -153,6 +153,31 @@ const html = template
 mkdirSync(join(ROOT, 'web'), { recursive: true });
 writeFileSync(join(ROOT, 'web/index.html'), html);
 console.log(`web/index.html   (${(html.length / 1024).toFixed(0)} KB, engine bundle ${(engineWorkerSource.length / 1024).toFixed(0)} KB)`);
+
+// coi-serviceworker + Fairy-Stockfish : สำหรับสมอง "เต็มพลัง" บนโฮสต์สแตติก
+const coiSrc = join(ROOT, 'vendor/coi-serviceworker.min.js');
+if (existsSync(coiSrc)) {
+  copyFileSync(coiSrc, join(ROOT, 'web/coi-serviceworker.min.js'));
+  console.log('web/coi-serviceworker.min.js');
+} else {
+  console.warn('  ! ไม่พบ vendor/coi-serviceworker.min.js');
+}
+// _headers : ให้ Netlify / Cloudflare Pages เปิด cross-origin isolation เอง (ไม่ต้องพึ่ง SW)
+writeFileSync(join(ROOT, 'web/_headers'),
+  '/*\n  Cross-Origin-Opener-Policy: same-origin\n  Cross-Origin-Embedder-Policy: credentialless\n');
+console.log('web/_headers  (Netlify / Cloudflare Pages)');
+
+const fairyDir = join(ROOT, 'vendor/fairy');
+if (existsSync(fairyDir)) {
+  mkdirSync(join(ROOT, 'web/fairy'), { recursive: true });
+  for (const f of ['stockfish.js', 'stockfish.wasm', 'stockfish.worker.js', 'AUTHORS', 'Copying.txt']) {
+    const s = join(fairyDir, f);
+    if (existsSync(s)) copyFileSync(s, join(ROOT, 'web/fairy', f));
+  }
+  console.log('web/fairy/  (Fairy-Stockfish WASM — สมองเต็มพลัง)');
+} else {
+  console.warn('  ! ไม่พบ vendor/fairy/ — ปุ่ม Fairy-Stockfish จะโหลดไม่ได้ (ดู README วิธีเพิ่ม)');
+}
 
 // artifact.html : เอาโครง <!DOCTYPE>/<html>/<head>/<body> ออก (Claude Artifact ครอบให้เอง)
 const artifact = html

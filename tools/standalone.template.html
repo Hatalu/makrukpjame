@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>สนามซ้อมหมากรุกไทย</title>
 <meta name="description" content="กระดานหมากรุกไทยเล่นกับเอนจิ้น AI (เต็มกำลัง Best Move) พร้อมกฎการนับและรูปแบบเปิดหมาก">
+<script>
+  // เปิด cross-origin isolation (จำเป็นสำหรับ Fairy-Stockfish WASM แบบหลายเธรด)
+  // ผ่าน coi-serviceworker — ไฟล์นี้ต้องอยู่ข้าง ๆ index.html บนโฮสต์ (GitHub Pages ฯลฯ)
+  // ถ้าไม่มี (เช่นในตัวอย่าง Artifast) จะข้ามไปเงียบ ๆ แล้วใช้เอนจิ้น JS อย่างเดียว
+  if (!window.crossOriginIsolated && location.protocol.indexOf('http') === 0 && navigator.serviceWorker) {
+    var _coi = document.createElement('script');
+    _coi.src = './coi-serviceworker.min.js';
+    _coi.onerror = function () { window.__noCOI = true; };
+    document.head.appendChild(_coi);
+  }
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Trirong:ital,wght@0,500;0,600;1,500&family=Sarabun:wght@400;500;600;700&display=swap">
@@ -186,7 +197,13 @@
     outline:2px solid var(--focus); outline-offset:2px;
   }
 
-  .hintline { margin:12px 0 0; font-size:12px; color:var(--ink-soft); }
+  .hintline { margin:10px 0 0; font-size:12px; color:var(--ink-soft); }
+  .brainsel { display:flex; gap:0; margin-top:12px; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .brainsel button { flex:1; font:inherit; font-size:12.5px; padding:8px 6px; cursor:pointer;
+    background:var(--surface-2); color:var(--ink-soft); border:0; border-right:1px solid var(--line); }
+  .brainsel button:last-child { border-right:0; }
+  .brainsel button.on { background:var(--accent); color:var(--accent-ink); font-weight:600; }
+  .brainsel button:disabled { opacity:.5; cursor:progress; }
 
   .stat { font-size:13px; line-height:1.85; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
   .stat b { color:var(--ink); }
@@ -272,7 +289,12 @@
         <button class="act" id="side" type="button">คุณเล่น: ขาว</button>
         <button class="act" id="gonow" type="button">ให้บอทเดิน</button>
       </div>
-      <p class="hintline">บอทเล่นเต็มกำลัง (Best Move) เสมอ</p>
+
+      <div class="brainsel">
+        <button type="button" data-brain="js" class="on">เอนจิ้นเบา (JS)</button>
+        <button type="button" data-brain="fsf">Fairy-Stockfish</button>
+      </div>
+      <p class="hintline" id="brainNote">บอทเล่นเต็มกำลัง (Best Move) เสมอ</p>
     </div>
 
     <div class="card">
@@ -333,6 +355,72 @@ try {
 }
 const post = (m) => engine.postMessage(m);
 
+// ---------- สมองสำรอง: Fairy-Stockfish WASM (variant makruk, เต็มพลัง) ----------
+// JS engine ยังเป็น "ผู้ตัดสินกระดาน" เสมอ (กติกา/FEN/นับ/จบเกม)
+// Fairy-Stockfish ทำหน้าที่ "เลือกหมาก" อย่างเดียว
+const START_FEN_UCI = "rnsmksnr/8/pppppppp/8/8/PPPPPPPP/8/RNSKMSNR w - - 0 1";
+const FSF_DIR = "./fairy/";      // ไฟล์ Fairy-Stockfish วางข้าง index.html (same-origin!)
+let brain = "js";               // 'js' | 'fsf'
+let uciHistory = [];            // ประวัติหมากเดิน (uci, promo = ...m)
+
+const fsf = {
+  sf: null, loading: false, curSerial: 0, _readyCb: null,
+  send(c) { if (this.sf) this.sf.postMessage(c); },
+  ready() { return new Promise((res) => { this._readyCb = res; this.send("isready"); }); },
+  async load() {
+    if (this.sf) return true;
+    if (!window.crossOriginIsolated) throw new Error("ต้องมี cross-origin isolation");
+    await new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = FSF_DIR + "stockfish.js";
+      s.onload = res; s.onerror = () => rej(new Error("โหลดสคริปต์ไม่ได้"));
+      document.head.appendChild(s);
+    });
+    this.sf = await window.Stockfish({ locateFile: (p) => FSF_DIR + p });
+    this.sf.addMessageListener((l) => this.onLine(String(l)));
+    this.send("uci");
+    this.send("setoption name UCI_Variant value makruk");
+    this.send("setoption name Hash value 128");
+    this.send("setoption name Threads value " +
+      Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1)));
+    await this.ready();
+    return true;
+  },
+  onLine(line) {
+    if (line === "readyok") { const c = this._readyCb; this._readyCb = null; if (c) c(); return; }
+    if (line.indexOf("info ") === 0 && line.indexOf(" pv ") > 0) {
+      if (this.curSerial !== goSerial) return;
+      const d = /\bdepth (\d+)/.exec(line);
+      const sc = /\bscore (cp|mate) (-?\d+)/.exec(line);
+      const nd = /\bnodes (\d+)/.exec(line);
+      const ns = /\bnps (\d+)/.exec(line);
+      onEngineMessage({
+        type: "info", serial: this.curSerial,
+        depth: d ? +d[1] : 0,
+        score: sc ? (sc[1] === "cp" ? +sc[2] : Math.sign(+sc[2]) * 29000) : 0,
+        scoreType: sc && sc[1] === "mate" ? "mate" : "cp",
+        mate: sc && sc[1] === "mate" ? +sc[2] : undefined,
+        nodes: nd ? +nd[1] : 0, nps: ns ? +ns[1] : 0,
+        pv: line.split(" pv ")[1].trim().split(/\s+/), pvSan: null,
+      });
+    } else if (line.indexOf("bestmove") === 0) {
+      const mv = line.split(/\s+/)[1];
+      onEngineMessage({
+        type: "bestmove", serial: this.curSerial,
+        move: mv && mv !== "(none)" ? mv : null, san: null,
+      });
+    }
+  },
+  go(kind) {
+    this.curSerial = goSerial;
+    this.send("position fen " + START_FEN_UCI +
+      (uciHistory.length ? " moves " + uciHistory.join(" ") : ""));
+    this.send("go movetime " + (kind === "hint" ? 900 : MOVE_TIME));
+  },
+  stop() { this.send("stop"); },
+  newgame() { this.send("ucinewgame"); },
+};
+
 const FILES = "abcdefgh";
 const CH = { p:"P", n:"N", s:"S", m:"M", r:"R", k:"K" };
 // รูปตัวหมากจากโฟลเดอร์ design/ (ฝังเป็น data URI ตอน build) key = สี+ชนิด เช่น "wK","bP"
@@ -388,6 +476,7 @@ function onEngineMessage(m) {
     case "legal": legal = m.moves; render(); break;
     case "moved":
       sanList.push(m.san || m.uci);
+      uciHistory.push(m.uci.replace("=M", "m").replace("=", ""));  // uci สำหรับ Fairy-SF
       lastMove = { from: sqIdx(m.uci.slice(0, 2)), to: sqIdx(m.uci.slice(2, 4)) };
       renderMoves(); post({ type: "eval" });
       break;
@@ -411,8 +500,9 @@ function onEngineMessage(m) {
 }
 
 function newGame() {
-  sanList = []; selected = -1; lastMove = null; gameOver = false;
+  sanList = []; uciHistory = []; selected = -1; lastMove = null; gameOver = false;
   pendingGo = null; goSerial++;
+  if (fsf.sf) { fsf.stop(); fsf.newgame(); }
   resultEl.textContent = "";
   post({ type: "newgame" });
   post({ type: "eval" });
@@ -423,7 +513,8 @@ function startGo(kind) {
   pendingGo = kind; thinking = true; goSerial++;
   frameEl.classList.add("is-thinking");
   turnText.textContent = kind === "hint" ? "กำลังหาคำแนะนำ…" : "บอทกำลังคิด…";
-  post({ type: "go", serial: goSerial, movetime: kind === "hint" ? 900 : MOVE_TIME });
+  if (brain === "fsf" && fsf.sf) fsf.go(kind);
+  else post({ type: "go", serial: goSerial, movetime: kind === "hint" ? 900 : MOVE_TIME });
 }
 function maybeEngineMove() {
   if (gameOver || thinking || pendingGo) return;
@@ -560,7 +651,7 @@ document.getElementById("undo").addEventListener("click", () => {
   if (!ready || thinking) return;
   const back = Math.min(sanList.length, turn === humanSide ? 2 : 1);
   if (!back) return;
-  for (let i = 0; i < back; i++) sanList.pop();
+  for (let i = 0; i < back; i++) { sanList.pop(); uciHistory.pop(); }
   gameOver = false; resultEl.textContent = ""; lastMove = null;
   post({ type: "undo", count: back }); post({ type: "eval" });
 });
@@ -572,6 +663,50 @@ document.getElementById("side").addEventListener("click", () => {
   document.getElementById("side").textContent = "คุณเล่น: " + (humanSide === "white" ? "ขาว" : "ดำ");
   flipped = humanSide === "black"; render(); maybeEngineMove();
 });
+
+// ---------- brain selector: JS engine  <->  Fairy-Stockfish ----------
+const brainNote = document.getElementById("brainNote");
+function setBrainUI(b) {
+  document.querySelectorAll(".brainsel button").forEach((x) => x.classList.toggle("on", x.dataset.brain === b));
+}
+document.querySelectorAll(".brainsel button").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const want = btn.dataset.brain;
+    if (want === brain || thinking || btn.disabled) return;
+
+    if (want === "js") {
+      if (fsf.sf) fsf.stop();
+      brain = "js"; goSerial++; pendingGo = null; thinking = false;
+      frameEl.classList.remove("is-thinking");
+      setBrainUI("js");
+      brainNote.textContent = "เอนจิ้น JS (เบา · ทำงานได้ทุกที่ · Best Move)";
+      maybeEngineMove();
+      return;
+    }
+
+    // want === "fsf"
+    if (!window.crossOriginIsolated) {
+      brainNote.textContent = "Fairy-Stockfish ต้องรันบนโฮสต์ที่เปิด cross-origin isolation " +
+        "(เช่น GitHub Pages + ไฟล์ coi-serviceworker.min.js) — หน้านี้จึงใช้ไม่ได้ ยังใช้เอนจิ้น JS";
+      return;
+    }
+    btn.disabled = true;
+    brainNote.textContent = "กำลังโหลด Fairy-Stockfish… (~1.6 MB จาก CDN)";
+    try {
+      await fsf.load();
+      brain = "fsf"; goSerial++; pendingGo = null; thinking = false;
+      frameEl.classList.remove("is-thinking");
+      setBrainUI("fsf");
+      brainNote.textContent = "Fairy-Stockfish พร้อม · variant makruk · เต็มพลัง (สมองเดียวกับ GodratSF+)";
+      maybeEngineMove();
+    } catch (e) {
+      brainNote.textContent = "โหลด Fairy-Stockfish ไม่สำเร็จ: " + (e && e.message || e) + " — ใช้เอนจิ้น JS ต่อ";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+});
+
 // theme toggle (system → light → dark → system)
 const themeBtn = document.getElementById("themeBtn");
 let themeMode = "system";

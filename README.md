@@ -69,18 +69,46 @@ w.postMessage({ type: 'domove', uci: 'f3f4' });
 w.postMessage({ type: 'go', movetime: 1000 });
 ```
 
-### 4) เว็บหน้าเดียว (พร้อมใช้)
+### 4) เว็บสนามซ้อม (`web/`)
 
-`web/index.html` = หน้าเว็บสนามซ้อมแบบสมบูรณ์ (กระดาน + เอนจิ้นฝังในไฟล์ + Blob Worker
-+ fallback รันบน main thread) เปิดได้ทันทีแม้ดับเบิลคลิก ไม่ต้องมีเซิร์ฟเวอร์
+`web/index.html` = หน้าเว็บสนามซ้อมสมบูรณ์ (กระดาน + เอนจิ้น JS ฝังในไฟล์ + Blob Worker
++ fallback main thread) เปิดไฟล์เดียวได้เลย
 
 ```bash
-npm run build          # สร้าง web/index.html จาก src/ + tools/standalone.template.html
-npm run serve          # หรือเปิด examples/play.html (ใช้ worker แยกไฟล์)
+npm run build     # สร้าง web/ ใหม่จาก src/ + tools/standalone.template.html + vendor/
+npm run serve     # เสิร์ฟ web/ พร้อม header COOP/COEP (จำเป็นสำหรับ Fairy-Stockfish)
 ```
 
-เอาไปวางบนโฮสต์สแตติกไหนก็ได้ (GitHub Pages, Netlify, Cloudflare Pages ฯลฯ) — ก็อป `web/index.html`
-ไฟล์เดียวจบ
+โครง `web/` หลัง build:
+
+```
+web/
+├── index.html                 หน้าเว็บ (เอนจิ้น JS ฝังในตัว)
+├── coi-serviceworker.min.js    เปิด cross-origin isolation บนโฮสต์สแตติก
+└── fairy/                      Fairy-Stockfish WASM (สมองเต็มพลัง)
+    ├── stockfish.js  stockfish.wasm  stockfish.worker.js
+```
+
+เอาโฟลเดอร์ `web/` ทั้งหมดไปวางบน GitHub Pages / Netlify / Cloudflare Pages ได้เลย
+
+### 5) สองสมอง: เอนจิ้น JS  ↔  Fairy-Stockfish
+
+หน้าเว็บมีปุ่มสลับ "สมองของบอท":
+
+| | เอนจิ้นเบา (JS) | Fairy-Stockfish |
+|---|---|---|
+| แรง | ระดับสโมสร (depth ~8–10) | **เต็มพลัง (depth ~16+)** — คอร์เดียวกับ GodratSF+ |
+| ขนาด | ฝังในไฟล์ (~70 KB) | โหลด `fairy/` (~1.7 MB) ครั้งแรก |
+| ต้องการ | ไม่มี — ทำงานทุกที่ | **cross-origin isolation** (SharedArrayBuffer) |
+
+**Fairy-Stockfish จะใช้ได้ก็ต่อเมื่อหน้าเว็บ cross-origin isolated:**
+- **โฮสต์ที่ตั้ง header เองได้** (Cloudflare Pages `_headers`, Netlify `_headers`, เซิร์ฟเวอร์ตัวเอง):
+  ตั้ง `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp` (หรือ `credentialless`)
+- **GitHub Pages** (ตั้ง header ไม่ได้): ไฟล์ `coi-serviceworker.min.js` จะจัดการให้อัตโนมัติ (โหลดหน้าใหม่ 1 ครั้ง)
+- **ในตัวอย่าง Claude Artifact**: ไม่ isolated → ปุ่ม Fairy-Stockfish จะแจ้งว่าใช้ไม่ได้ ใช้เอนจิ้น JS แทน
+
+> Fairy-Stockfish = Fairy-Stockfish.wasm 1.1.12 (Fabian Fichter, GPL-3.0) รองรับ variant `makruk` ในตัว
+> JS engine ยังเป็น "ผู้ตัดสินกระดาน" เสมอ (กติกา/FEN/นับ/จบเกม) — Fairy-SF แค่เลือกหมาก
 
 ---
 
