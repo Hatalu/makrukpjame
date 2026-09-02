@@ -686,8 +686,8 @@ document.querySelectorAll(".brainsel button").forEach((btn) => {
 
     // want === "fsf"
     if (!window.crossOriginIsolated) {
-      brainNote.textContent = "Fairy-Stockfish ต้องรันบนโฮสต์ที่เปิด cross-origin isolation " +
-        "(เช่น GitHub Pages + ไฟล์ coi-serviceworker.min.js) — หน้านี้จึงใช้ไม่ได้ ยังใช้เอนจิ้น JS";
+      brainNote.innerHTML = "Fairy-Stockfish ใช้ไม่ได้ในหน้านี้ (ไม่มี cross-origin isolation) — " +
+        'เปิดเวอร์ชันเต็มที่ <a href="https://hatalu.github.io/makrukpjame/" target="_blank" rel="noopener">hatalu.github.io/makrukpjame</a>';
       return;
     }
     btn.disabled = true;
