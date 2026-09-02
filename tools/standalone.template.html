@@ -4,11 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>สนามซ้อมหมากรุกไทย</title>
-<meta name="description" content="กระดานหมากรุกไทยเล่นกับเอนจิ้น AI (เต็มกำลัง Best Move) พร้อมกฎการนับและรูปแบบเปิดหมาก">
+<meta name="description" content="กระดานหมากรุกไทย: เล่นกับ AI / เล่น 2 คน / ตั้งหมากอิสระ · แนะนำตาเดินหลายทางพร้อมแต้ม · Fairy-Stockfish + NNUE">
 <script>
-  // เปิด cross-origin isolation (จำเป็นสำหรับ Fairy-Stockfish WASM แบบหลายเธรด)
-  // ผ่าน coi-serviceworker — ไฟล์นี้ต้องอยู่ข้าง ๆ index.html บนโฮสต์ (GitHub Pages ฯลฯ)
-  // ถ้าไม่มี (เช่นในตัวอย่าง Artifast) จะข้ามไปเงียบ ๆ แล้วใช้เอนจิ้น JS อย่างเดียว
+  // cross-origin isolation (จำเป็นสำหรับ Fairy-Stockfish WASM หลายเธรด) ผ่าน coi-serviceworker
   if (!window.crossOriginIsolated && location.protocol.indexOf('http') === 0 && navigator.serviceWorker) {
     var _coi = document.createElement('script');
     _coi.src = './coi-serviceworker.min.js';
@@ -20,20 +18,15 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Trirong:ital,wght@0,500;0,600;1,500&family=Sarabun:wght@400;500;600;700&display=swap">
 <style>
-  /* ============ palette : teak lacquer & brass ============ */
   :root {
     --ground:#e7dbc3; --surface:#f1e8d5; --surface-2:#ece0c8;
     --ink:#2b2013; --ink-soft:#6f5d43; --line:#cdbb92;
     --accent:#9e2b25; --accent-ink:#fff3ec;
     --brass:#9a6f2e; --brass-bright:#b98a3c;
-    --good:#3f6b52;
-    --sq-light:#e6cb9c; --sq-dark:#9a6336;
+    --good:#3f6b52; --pos:#3f6b52; --neg:#a5402f;
     --frame:#5f4022; --frame-edge:#3f2914;
-    --piece-light:#f0e2c1; --piece-light-ink:#2b2013;
-    --piece-dark:#33251a; --piece-dark-ink:#f2e3c2;
-    --shadow:rgba(48,30,14,.28);
-    --focus:#9e2b25;
-    /* กระดานไม้ — สีเดียวกันทุกช่อง คงที่ทั้งสองธีม */
+    --piece-light:#f0e2c1; --piece-dark:#33251a;
+    --shadow:rgba(48,30,14,.28); --focus:#9e2b25;
     --board-wood:#b5804e; --board-line:#66421f;
   }
   @media (prefers-color-scheme: dark) {
@@ -42,13 +35,10 @@
       --ink:#efe2cb; --ink-soft:#b19a77; --line:#3c2b1b;
       --accent:#dc5a4d; --accent-ink:#1a0d09;
       --brass:#c99a4e; --brass-bright:#e0b568;
-      --good:#6fae86;
-      --sq-light:#d6bc8f; --sq-dark:#7a4b29;
+      --good:#6fae86; --pos:#6fae86; --neg:#e0765f;
       --frame:#3c2817; --frame-edge:#1f130a;
-      --piece-light:#ecdcb9; --piece-light-ink:#241a12;
-      --piece-dark:#221812; --piece-dark-ink:#ecdcb9;
-      --shadow:rgba(0,0,0,.5);
-      --focus:#dc5a4d;
+      --piece-light:#ecdcb9; --piece-dark:#221812;
+      --shadow:rgba(0,0,0,.5); --focus:#dc5a4d;
     }
   }
   :root[data-theme="dark"] {
@@ -56,13 +46,10 @@
     --ink:#efe2cb; --ink-soft:#b19a77; --line:#3c2b1b;
     --accent:#dc5a4d; --accent-ink:#1a0d09;
     --brass:#c99a4e; --brass-bright:#e0b568;
-    --good:#6fae86;
-    --sq-light:#d6bc8f; --sq-dark:#7a4b29;
+    --good:#6fae86; --pos:#6fae86; --neg:#e0765f;
     --frame:#3c2817; --frame-edge:#1f130a;
-    --piece-light:#ecdcb9; --piece-light-ink:#241a12;
-    --piece-dark:#221812; --piece-dark-ink:#ecdcb9;
-    --shadow:rgba(0,0,0,.5);
-    --focus:#dc5a4d;
+    --piece-light:#ecdcb9; --piece-dark:#221812;
+    --shadow:rgba(0,0,0,.5); --focus:#dc5a4d;
   }
 
   * { box-sizing:border-box; }
@@ -70,24 +57,18 @@
   body {
     margin:0; background:var(--ground); color:var(--ink);
     font-family:"Sarabun","Leelawadee UI","Noto Sans Thai",system-ui,sans-serif;
-    font-size:16px; line-height:1.6; letter-spacing:.005em;
+    font-size:16px; line-height:1.6;
   }
   @media (prefers-reduced-motion:reduce){ *{ animation-duration:.001ms!important; transition-duration:.001ms!important; } }
-
   h1,h2,h3 { font-family:"Trirong","Sarabun",serif; font-weight:600; margin:0; text-wrap:balance; }
 
-  /* ============ top bar ============ */
   .topbar {
     display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
-    padding:18px clamp(14px,4vw,40px) 14px;
-    border-bottom:1px solid var(--line);
+    padding:16px clamp(14px,4vw,40px) 12px; border-bottom:1px solid var(--line);
   }
-  .brand { font-family:"Trirong",serif; font-weight:600; font-size:clamp(20px,3.4vw,27px); color:var(--ink); }
+  .brand { font-family:"Trirong",serif; font-weight:600; font-size:clamp(19px,3.2vw,26px); }
   .brand .dot { color:var(--accent); }
-  .kicker {
-    font-size:11px; letter-spacing:.22em; text-transform:uppercase;
-    color:var(--ink-soft); font-weight:600;
-  }
+  .kicker { font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-soft); font-weight:600; }
   .topbar .spacer { flex:1; }
   .theme-btn {
     border:1px solid var(--line); background:var(--surface); color:var(--ink-soft);
@@ -95,19 +76,26 @@
   }
   .theme-btn:hover { border-color:var(--brass); color:var(--ink); }
 
-  /* ============ layout ============ */
+  /* ===== layout: board ซ้าย/บน · แนะนำตาเดิน ขวา · ควบคุม+รายการเดิน ล่าง ===== */
   .wrap {
-    display:grid; grid-template-columns:minmax(0,1fr) 340px;
-    gap:clamp(18px,3vw,40px);
-    padding:clamp(16px,3.5vw,38px) clamp(14px,4vw,40px) 48px;
-    align-items:start; max-width:1180px; margin:0 auto;
-    --board-size:min(54vw, 56vh, 560px);   /* ค่าเริ่มต้น; JS ปรับให้พอดีคอลัมน์อีกที */
+    display:grid; gap:clamp(16px,2.6vw,32px);
+    grid-template-columns:minmax(0,1fr) 320px;
+    grid-template-areas: "board suggest" "controls suggest" "moves suggest";
+    padding:clamp(14px,3vw,32px) clamp(12px,4vw,40px) 40px;
+    max-width:1200px; margin:0 auto; align-items:start;
+    --board-size:min(52vw, 58vh, 560px);
   }
-  @media (max-width:940px){
-    .wrap { grid-template-columns:minmax(0,1fr); --board-size:min(90vw, 62vh); }
+  @media (max-width:980px) {
+    .wrap { grid-template-columns:minmax(0,1fr);
+      grid-template-areas:"board" "suggest" "controls" "moves"; --board-size:min(92vw, 60vh); }
   }
+  .col-board { grid-area:board; }
+  .col-suggest { grid-area:suggest; }
+  .col-controls { grid-area:controls; }
+  .col-moves { grid-area:moves; }
+  @media (min-width:981px) { .col-suggest { position:sticky; top:16px; } }
 
-  /* ============ board — ขนาดตายตัว 8x8 ช่องเท่ากันเป๊ะ ไม่ขยับเมื่อเดินหมาก ============ */
+  /* ===== board ===== */
   .board-stage { display:flex; gap:12px; align-items:flex-start; }
   .evalbar {
     flex:0 0 14px; width:14px; height:var(--board-size);
@@ -115,154 +103,153 @@
     overflow:hidden; position:relative; background:var(--piece-dark);
   }
   .evalbar__white { position:absolute; left:0; right:0; bottom:0; height:50%;
-    background:linear-gradient(var(--brass-bright),var(--brass));
-    transition:height .35s cubic-bezier(.4,0,.2,1); }
+    background:linear-gradient(var(--brass-bright),var(--brass)); transition:height .35s cubic-bezier(.4,0,.2,1); }
   .evalbar__mid { position:absolute; left:0; right:0; top:50%; height:2px; background:var(--accent); opacity:.7; }
-
   .board-frame {
-    flex:0 0 auto; position:relative;
-    padding:clamp(12px,2.5vw,22px);
+    flex:0 0 auto; position:relative; padding:clamp(12px,2.4vw,20px);
     background:linear-gradient(135deg,var(--frame),var(--frame-edge));
-    border-radius:8px;
-    box-shadow:0 10px 30px -8px var(--shadow), inset 0 0 0 1px rgba(0,0,0,.25);
+    border-radius:8px; box-shadow:0 10px 30px -8px var(--shadow), inset 0 0 0 1px rgba(0,0,0,.25);
   }
-  .board-frame::after {
-    content:""; position:absolute; inset:7px; border-radius:4px; pointer-events:none;
-    border:1px solid var(--brass); opacity:.35;
-  }
+  .board-frame::after { content:""; position:absolute; inset:7px; border-radius:4px; pointer-events:none;
+    border:1px solid var(--brass); opacity:.35; }
   .board-frame.is-thinking::before {
     content:""; position:absolute; inset:0; border-radius:8px; pointer-events:none; z-index:2;
     background:linear-gradient(115deg,transparent 40%,color-mix(in srgb,var(--brass-bright) 55%,transparent) 50%,transparent 60%);
     background-size:280% 100%; animation:shimmer 1.5s linear infinite;
   }
+  .board-frame.setup { box-shadow:0 10px 30px -8px var(--shadow), inset 0 0 0 2px var(--accent); }
   @keyframes shimmer { from{ background-position:120% 0; } to{ background-position:-120% 0; } }
 
   .board {
     width:var(--board-size); height:var(--board-size);
-    display:grid;
-    grid-template-columns:repeat(8,1fr);
-    grid-template-rows:repeat(8,1fr);
-    gap:1px;
-    background:var(--board-line);           /* เส้นตารางโผล่ผ่าน gap */
-    outline:2px solid var(--board-line);
-    touch-action:manipulation;
+    display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr);
+    gap:1px; background:var(--board-line); outline:2px solid var(--board-line); touch-action:manipulation;
   }
-  .sq {
-    position:relative;
-    min-width:0; min-height:0;
-    background:var(--board-wood);           /* ไม้สีน้ำตาลเดียวกันทุกช่อง */
-    cursor:pointer;
-  }
+  .sq { position:relative; min-width:0; min-height:0; background:var(--board-wood); cursor:pointer; }
   .sq__co { position:absolute; font-size:10px; font-weight:700; line-height:1;
-    color:color-mix(in srgb,var(--board-line) 55%,#000); opacity:.65; pointer-events:none; }
+    color:color-mix(in srgb,var(--board-line) 55%,#000); opacity:.7; pointer-events:none; }
   .sq__co.f { right:3px; bottom:2px; } .sq__co.r { left:3px; top:2px; }
-
-  /* ตัวหมาก = รูป PNG โปร่งใส วางทับแบบ absolute จึงไม่กระทบขนาดช่องเลย */
   .piece {
     position:absolute; inset:7%;
     background-position:center; background-repeat:no-repeat; background-size:contain;
-    filter:drop-shadow(0 2px 3px rgba(0,0,0,.4));
-    pointer-events:none; user-select:none;
+    filter:drop-shadow(0 2px 3px rgba(0,0,0,.4)); pointer-events:none; user-select:none;
   }
-
   .sq.sel  { box-shadow:inset 0 0 0 4px var(--accent); }
-  .sq.mv::after {
-    content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:28%; height:28%; border-radius:50%;
-    background:color-mix(in srgb,var(--good) 78%,transparent);
-  }
+  .sq.mv::after { content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:28%; height:28%; border-radius:50%; background:color-mix(in srgb,var(--good) 78%,transparent); }
   .sq.mv.cap::after { width:86%; height:86%; background:none;
     border:5px solid color-mix(in srgb,var(--good) 62%,transparent); }
   .sq.last { box-shadow:inset 0 0 0 4px color-mix(in srgb,var(--brass-bright) 78%,transparent); }
   .sq.chk  { box-shadow:inset 0 0 0 4px var(--accent), inset 0 0 16px color-mix(in srgb,var(--accent) 45%,transparent); }
+  .sq.hintfrom { box-shadow:inset 0 0 0 4px color-mix(in srgb,var(--brass-bright) 70%,transparent); }
+  .sq.hintto::after { content:""; position:absolute; inset:16%; border-radius:50%;
+    border:4px solid color-mix(in srgb,var(--brass-bright) 75%,transparent); }
 
-  /* ============ side panel ============ */
-  .panel { display:flex; flex-direction:column; gap:16px; }
-  .card { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:15px 16px; }
-  .card h2 { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:10px; font-family:"Sarabun",sans-serif; font-weight:700; }
+  /* ===== cards / controls ===== */
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:14px 15px; margin-bottom:14px; }
+  .card:last-child { margin-bottom:0; }
+  .card h2 { font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft);
+    margin-bottom:9px; font-family:"Sarabun",sans-serif; font-weight:700; }
+  .card h2 .sub { float:right; text-transform:none; letter-spacing:0; font-weight:400; }
 
-  .turn { display:flex; align-items:center; gap:10px; font-size:15px; }
-  .turn .chip { width:16px; height:16px; border-radius:50%; border:1px solid var(--frame-edge); }
-  .turn .chip.w { background:var(--piece-light); } .turn .chip.b { background:var(--piece-dark); }
+  .segbtns { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .segbtns button { flex:1; font:inherit; font-size:13px; padding:9px 6px; cursor:pointer; border:0;
+    background:var(--surface-2); color:var(--ink-soft); border-right:1px solid var(--line); }
+  .segbtns button:last-child { border-right:0; }
+  .segbtns button.on { background:var(--accent); color:var(--accent-ink); font-weight:600; }
+  .segbtns button:disabled { opacity:.5; cursor:progress; }
 
-  .btns { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-  button.act {
-    font:inherit; font-size:13.5px; padding:9px 10px; cursor:pointer;
-    background:var(--surface-2); color:var(--ink); border:1px solid var(--line); border-radius:8px;
-  }
+  .btns { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:12px; }
+  button.act { font:inherit; font-size:13px; padding:9px 8px; cursor:pointer;
+    background:var(--surface-2); color:var(--ink); border:1px solid var(--line); border-radius:8px; }
   button.act:hover { border-color:var(--brass); }
   button.act.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
-  button.act.primary:hover { filter:brightness(1.06); }
-  button.act:focus-visible, .theme-btn:focus-visible, select:focus-visible, input:focus-visible {
-    outline:2px solid var(--focus); outline-offset:2px;
-  }
+  button.act:focus-visible, .theme-btn:focus-visible, .segbtns button:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+  .hintline { margin:11px 0 0; font-size:12px; color:var(--ink-soft); }
+  .hintline a { color:var(--accent); }
 
-  .hintline { margin:10px 0 0; font-size:12px; color:var(--ink-soft); }
-  .brainsel { display:flex; gap:0; margin-top:12px; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
-  .brainsel button { flex:1; font:inherit; font-size:12.5px; padding:8px 6px; cursor:pointer;
-    background:var(--surface-2); color:var(--ink-soft); border:0; border-right:1px solid var(--line); }
-  .brainsel button:last-child { border-right:0; }
-  .brainsel button.on { background:var(--accent); color:var(--accent-ink); font-weight:600; }
-  .brainsel button:disabled { opacity:.5; cursor:progress; }
-
-  .stat { font-size:13px; line-height:1.85; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
-  .stat b { color:var(--ink); }
-  .stat .pv { display:block; font-size:11.5px; margin-top:2px; word-break:break-all; opacity:.85; }
-
-  .count-pill {
-    display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
-    background:var(--surface-2); border:1px solid var(--line); border-radius:999px; padding:3px 11px; color:var(--ink);
-  }
+  .turn { display:flex; align-items:center; gap:9px; font-size:15px; }
+  .turn .chip { width:15px; height:15px; border-radius:50%; border:1px solid var(--frame-edge); }
+  .turn .chip.w { background:var(--piece-light); } .turn .chip.b { background:var(--piece-dark); }
+  .count-pill { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:999px; padding:3px 11px; margin-top:8px; }
   .count-pill.on { border-color:var(--accent); color:var(--accent); }
+  .result { font-family:"Trirong",serif; font-size:15px; font-weight:600; color:var(--accent); min-height:1.1em; margin-top:6px; }
 
-  .result { font-family:"Trirong",serif; font-size:16px; font-weight:600; color:var(--accent); min-height:1.2em; }
-
-  .moves {
-    font-variant-numeric:tabular-nums; font-size:13px; line-height:1.75;
-    max-height:230px; overflow-y:auto; background:var(--surface-2);
-    border:1px solid var(--line); border-radius:8px; padding:8px 10px;
+  /* ===== suggestions ===== */
+  .sugg-list { display:flex; flex-direction:column; gap:6px; min-height:40px; }
+  .sugg {
+    display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:8px;
+    padding:7px 10px; cursor:pointer; font-variant-numeric:tabular-nums;
   }
-  .moves .row { display:grid; grid-template-columns:28px 1fr 1fr; gap:6px; }
+  .sugg:hover { border-color:var(--brass); }
+  .sugg.best { border-color:color-mix(in srgb,var(--good) 55%,var(--line)); }
+  .sugg .rank { font-size:11px; color:var(--ink-soft); width:1.4em; }
+  .sugg .mv { font-weight:600; font-size:14px; }
+  .sugg .sc { font-weight:700; font-size:13.5px; }
+  .sugg .sc.pos { color:var(--pos); } .sugg .sc.neg { color:var(--neg); }
+  .sugg .dl { font-size:11px; color:var(--ink-soft); }
+  .sugg-meta { font-size:11.5px; color:var(--ink-soft); margin-top:8px; font-variant-numeric:tabular-nums; }
+
+  /* ===== setup palette ===== */
+  .palette { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-top:10px; }
+  .palette button {
+    aspect-ratio:1; border:1px solid var(--line); border-radius:7px; background:var(--board-wood);
+    cursor:pointer; padding:3px; display:flex; align-items:center; justify-content:center;
+  }
+  .palette button img { width:100%; height:100%; object-fit:contain; }
+  .palette button.on { outline:3px solid var(--accent); outline-offset:-1px; }
+  .palette button.erase { background:var(--surface-2); font-size:18px; color:var(--ink-soft); }
+  .setup-row { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center; }
+  .setup-row .msg { font-size:12px; }
+  .setup-row .msg.bad { color:var(--neg); } .setup-row .msg.ok { color:var(--pos); }
+
+  .stat { font-size:12.5px; line-height:1.8; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+  .stat b { color:var(--ink); }
+  .stat .pv { display:block; font-size:11px; margin-top:2px; word-break:break-all; opacity:.85; }
+
+  .moves { font-variant-numeric:tabular-nums; font-size:13px; line-height:1.7;
+    max-height:200px; overflow-y:auto; background:var(--surface-2);
+    border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  .moves .row { display:grid; grid-template-columns:30px 1fr 1fr; gap:6px; }
   .moves .n { color:var(--ink-soft); }
 
-  /* ============ formation reference ============ */
-  .formations { margin-top:22px; grid-column:1 / -1; max-width:1180px; }
-  .formations > summary {
-    cursor:pointer; font-family:"Trirong",serif; font-size:18px; font-weight:600;
-    padding:12px 0; border-top:1px solid var(--line); list-style:none;
-  }
+  .legend { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; font-size:12px; color:var(--ink-soft); margin-top:12px; }
+  .legend span { display:inline-flex; align-items:center; gap:5px; }
+  .legend img { width:22px; height:22px; object-fit:contain; background:var(--board-wood); border-radius:5px; padding:1px; }
+
+  .formations { grid-column:1 / -1; max-width:1200px; margin-top:6px; }
+  .formations > summary { cursor:pointer; font-family:"Trirong",serif; font-size:17px; font-weight:600;
+    padding:12px 0; border-top:1px solid var(--line); list-style:none; }
   .formations > summary::-webkit-details-marker { display:none; }
   .formations > summary::before { content:"▸ "; color:var(--accent); }
   .formations[open] > summary::before { content:"▾ "; }
-  .fgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px; padding:6px 0 4px; }
-  .fitem { background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:11px 13px; }
+  .fgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; padding:6px 0 4px; }
+  .fitem { background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:10px 12px; }
   .fitem .code { font-family:"Trirong",serif; font-weight:600; color:var(--accent); font-size:14px; }
-  .fitem .th { font-weight:600; font-size:13.5px; }
-  .fitem .desc { font-size:12px; color:var(--ink-soft); margin-top:3px; }
+  .fitem .th { font-weight:600; font-size:13px; }
+  .fitem .desc { font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
 
-  .legend { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; font-size:12.5px; color:var(--ink-soft); margin-top:12px; }
-  .legend span { display:inline-flex; align-items:center; gap:5px; }
-  .legend img { width:22px; height:22px; object-fit:contain;
-    background:var(--board-wood); border-radius:5px; padding:1px; }
-
-  .foot { grid-column:1/-1; max-width:1180px; margin:26px auto 0; font-size:12px; color:var(--ink-soft); text-align:center; }
+  .foot { grid-column:1/-1; max-width:1200px; margin:22px auto 0; font-size:11.5px; color:var(--ink-soft); text-align:center; }
   .foot a { color:var(--accent); }
+  [hidden] { display:none !important; }
 </style>
 </head>
 <body>
 <header class="topbar">
   <span class="brand">สนามซ้อม<span class="dot">หมากรุกไทย</span></span>
-  <span class="kicker">Makruk Trainer · Engine MakrukThai</span>
+  <span class="kicker">Makruk Trainer</span>
   <span class="spacer"></span>
-  <button class="theme-btn" id="themeBtn" type="button">โหมดมืด/สว่าง</button>
+  <button class="theme-btn" id="themeBtn" type="button">โหมด: ตามระบบ</button>
 </header>
 
 <main class="wrap">
-  <section>
+  <!-- ===== board ===== -->
+  <section class="col-board">
     <div class="board-stage">
       <div class="evalbar" title="แต้มประเมิน (ขาวได้เปรียบ = แถบทองสูงขึ้น)">
-        <div class="evalbar__white" id="evalWhite"></div>
-        <div class="evalbar__mid"></div>
+        <div class="evalbar__white" id="evalWhite"></div><div class="evalbar__mid"></div>
       </div>
       <div class="board-frame" id="frame">
         <div class="board" id="board" role="grid" aria-label="กระดานหมากรุกไทย"></div>
@@ -271,42 +258,73 @@
     <p class="legend" id="legend"></p>
   </section>
 
-  <aside class="panel">
+  <!-- ===== แนะนำตาเดิน (ด้านข้าง) ===== -->
+  <aside class="col-suggest">
+    <div class="card">
+      <h2>แนะนำตาเดิน <span class="sub" id="suggTurn"></span></h2>
+      <div class="sugg-list" id="suggList"><div class="sugg-meta">— รอตำแหน่ง —</div></div>
+      <div class="sugg-meta" id="suggMeta"></div>
+    </div>
     <div class="card">
       <h2>สถานะ</h2>
       <div class="turn"><span class="chip" id="turnChip"></span><span id="turnText">กำลังโหลดเอนจิ้น…</span></div>
-      <div style="margin-top:8px"><span class="count-pill" id="countPill">ยังไม่เริ่มนับ</span></div>
+      <div><span class="count-pill" id="countPill">ยังไม่เริ่มนับ</span></div>
       <div class="result" id="result"></div>
+      <div class="stat" id="engineStat" style="margin-top:8px"></div>
     </div>
+  </aside>
 
+  <!-- ===== ควบคุม (ด้านล่างกระดาน) ===== -->
+  <section class="col-controls">
     <div class="card">
-      <h2>ควบคุม</h2>
-      <div class="btns">
-        <button class="act primary" id="new" type="button">เกมใหม่</button>
-        <button class="act" id="undo" type="button">ถอนตา</button>
-        <button class="act" id="flip" type="button">พลิกกระดาน</button>
-        <button class="act" id="hint" type="button">ขอคำแนะนำ</button>
-        <button class="act" id="side" type="button">คุณเล่น: ขาว</button>
-        <button class="act" id="gonow" type="button">ให้บอทเดิน</button>
+      <h2>โหมด</h2>
+      <div class="segbtns" id="modeSel">
+        <button type="button" data-mode="bot" class="on">เล่นกับบอท</button>
+        <button type="button" data-mode="2p">เล่น 2 คน</button>
+        <button type="button" data-mode="setup">ตั้งหมาก</button>
       </div>
 
-      <div class="brainsel">
-        <button type="button" data-brain="js" class="on">เอนจิ้นเบา (JS)</button>
-        <button type="button" data-brain="fsf">Fairy-Stockfish</button>
+      <!-- โหมดเล่น -->
+      <div id="playControls">
+        <div class="btns">
+          <button class="act primary" id="new" type="button">เกมใหม่</button>
+          <button class="act" id="undo" type="button">ถอนตา</button>
+          <button class="act" id="flip" type="button">พลิกกระดาน</button>
+          <button class="act" id="hint" type="button">โชว์คำแนะนำ</button>
+          <button class="act" id="side" type="button" data-botmode>คุณเล่น: ขาว</button>
+          <button class="act" id="gonow" type="button" data-botmode>ให้บอทเดิน</button>
+        </div>
+        <div class="segbtns" style="margin-top:12px">
+          <button type="button" data-brain="js" class="on">เอนจิ้นเบา (JS)</button>
+          <button type="button" data-brain="fsf">Fairy-Stockfish</button>
+        </div>
+        <p class="hintline" id="brainNote">บอทเล่นเต็มกำลัง (Best Move) เสมอ</p>
       </div>
-      <p class="hintline" id="brainNote">บอทเล่นเต็มกำลัง (Best Move) เสมอ</p>
-    </div>
 
-    <div class="card">
-      <h2>สมองของบอท</h2>
-      <div class="stat" id="engineStat">รอเริ่มเกม…</div>
+      <!-- โหมดตั้งหมาก -->
+      <div id="setupControls" hidden>
+        <div class="palette" id="palette"></div>
+        <div class="setup-row">
+          <button class="act" id="setupTurn" type="button">ฝ่ายเดิน: ขาว</button>
+          <button class="act" id="setupStart" type="button">ตำแหน่งเริ่มเกม</button>
+          <button class="act" id="setupClear" type="button">ล้างกระดาน</button>
+        </div>
+        <div class="setup-row">
+          <button class="act primary" id="setupPlay" type="button">เริ่มเล่นจากตำแหน่งนี้</button>
+          <span class="msg" id="setupMsg"></span>
+        </div>
+        <p class="hintline">เลือกหมากจากถาด แล้วแตะช่องเพื่อวาง · เลือก 🚫 เพื่อลบ · ห้ามขุนเกิน 1 / เรือ-ม้า-โคน เกิน 2 (เม็ดเกินได้ = เบี้ยหงาย)</p>
+      </div>
     </div>
+  </section>
 
+  <!-- ===== รายการเดิน ===== -->
+  <section class="col-moves">
     <div class="card">
       <h2>รายการเดิน</h2>
       <div class="moves" id="moves"></div>
     </div>
-  </aside>
+  </section>
 
   <details class="formations">
     <summary>รูปแบบเปิดหมากสไตล์ GodratSF+ (18 แบบ)</summary>
@@ -314,213 +332,162 @@
   </details>
 
   <p class="foot">
-    เอนจิ้น alpha-beta / Stockfish-lite เขียนด้วย JavaScript ล้วน · กติกาหมากรุกไทยครบ (เลื่อนขั้นเป็นเม็ด, กฎการนับ) ·
-    ทำงานทั้งหมดในเบราว์เซอร์ ไม่ส่งข้อมูลออกที่ไหน
+    เอนจิ้น JS ฝังในไฟล์ + Fairy-Stockfish WASM (variant makruk + NNUE) · ทุกอย่างทำงานในเบราว์เซอร์ ไม่ส่งข้อมูลออก ·
+    <a href="https://github.com/Hatalu/makrukpjame" target="_blank" rel="noopener">source</a>
   </p>
 </main>
 
 <script>
 "use strict";
-// ---------- เอนจิ้นฝังในไฟล์ ----------
-// ปกติรันใน Blob Worker (ไม่ให้หน้าเว็บค้าง) ถ้าสภาพแวดล้อมบล็อก worker
-// จะ fallback ไปรันบน main thread แทน (โปรโตคอลข้อความเหมือนกัน)
 const ENGINE_SRC = /*__ENGINE_WORKER_SOURCE__*/;
 const BOOK = /*__BOOK_JSON__*/;
+const PIECE_IMG = /*__PIECE_IMAGES__*/;
 
-let engine = null;        // ตัวรับข้อความ: { postMessage(msg) }
-let usingWorker = false;
-let bootstrapped = false;
-
+/* ---------------- JS engine (Blob Worker หรือ fallback main-thread) ---------------- */
+let engine = null, bootstrapped = false;
 function bootLocalEngine() {
-  // shim ของ `self` — ส่งข้อความแบบ async ทั้งสองทาง เลียนแบบขอบเขตของ Worker
-  const shim = {
-    onmessage: null,
-    postMessage: (m) => setTimeout(() => onEngineMessage(m), 0),
-  };
+  const shim = { onmessage:null, postMessage:(m)=>setTimeout(()=>onEngineMessage(m),0) };
   new Function("self", ENGINE_SRC)(shim);
-  return { postMessage: (m) => setTimeout(() => { if (shim.onmessage) shim.onmessage({ data: m }); }, 0) };
+  return { postMessage:(m)=>setTimeout(()=>{ if(shim.onmessage) shim.onmessage({data:m}); },0) };
 }
-
-const FORCE_LOCAL = /[?&](local|noworker)\b/.test(location.search);
 try {
-  if (FORCE_LOCAL) throw new Error("forced local engine");
-  const w = new Worker(URL.createObjectURL(new Blob([ENGINE_SRC], { type: "text/javascript" })));
+  if (/[?&](local|noworker)\b/.test(location.search)) throw 0;
+  const w = new Worker(URL.createObjectURL(new Blob([ENGINE_SRC], { type:"text/javascript" })));
   w.onmessage = (e) => onEngineMessage(e.data);
-  w.onerror = () => { if (!bootstrapped) { try { w.terminate(); } catch (e) {} engine = bootLocalEngine(); usingWorker = false; } };
+  w.onerror = () => { if (!bootstrapped) { try{w.terminate();}catch(e){} engine = bootLocalEngine(); } };
   engine = w;
-  usingWorker = true;
-} catch (err) {
-  engine = bootLocalEngine();
-  usingWorker = false;
-}
+} catch (e) { engine = bootLocalEngine(); }
 const post = (m) => engine.postMessage(m);
 
-// ---------- สมองสำรอง: Fairy-Stockfish WASM (variant makruk, เต็มพลัง) ----------
-// JS engine ยังเป็น "ผู้ตัดสินกระดาน" เสมอ (กติกา/FEN/นับ/จบเกม)
-// Fairy-Stockfish ทำหน้าที่ "เลือกหมาก" อย่างเดียว
-const START_FEN_UCI = "rnsmksnr/8/pppppppp/8/8/PPPPPPPP/8/RNSKMSNR w - - 0 1";
-const FSF_DIR = "./fairy/";      // ไฟล์ Fairy-Stockfish วางข้าง index.html (same-origin!)
-let brain = "js";               // 'js' | 'fsf'
-let uciHistory = [];            // ประวัติหมากเดิน (uci, promo = ...m)
+/* ---------------- constants / state ---------------- */
+const FILES = "abcdefgh";
+const TFILE = ["ก","ข","ค","ง","จ","ฉ","ช","ญ"];         // ป้ายแนวนอนภาษาไทย
+const CH = { p:"P", n:"N", s:"S", m:"M", r:"R", k:"K" };
+const GLYPH = { P:"♟", N:"♞", S:"♝", M:"♛", R:"♜", K:"♚" };
+const START_FEN = "rnsmksnr/8/pppppppp/8/8/PPPPPPPP/8/RNSKMSNR w - - 0 1";
+const FSF_DIR = "./fairy/";
+const MOVE_TIME = 1800, ANALYZE_TIME = 1500;
+const PIECE_MAX = { K:1, R:2, N:2, S:2, P:8, M:12 };
 
+let mode = "bot";            // 'bot' | '2p' | 'setup'
+let brain = "js";            // 'js' | 'fsf'
+let baseFen = START_FEN;     // FEN ที่เกมนี้เริ่มจาก (สำหรับส่งให้ Fairy-SF)
+let uciHistory = [];
+let board64 = [], turn = "white", humanSide = "white", flipped = false;
+let legal = [], selected = -1, lastMove = null, checkSq = -1, sanList = [];
+let ready = false, thinking = false, gameOver = false, pendingGo = null, goSerial = 0;
+let hintArrow = null;        // {from,to} จาก "โชว์คำแนะนำ"
+
+const $ = (id) => document.getElementById(id);
+const boardEl=$("board"), frameEl=$("frame"), turnChip=$("turnChip"), turnText=$("turnText"),
+      countPill=$("countPill"), resultEl=$("result"), engineStat=$("engineStat"),
+      movesEl=$("moves"), evalWhite=$("evalWhite"), brainNote=$("brainNote"),
+      suggList=$("suggList"), suggMeta=$("suggMeta"), suggTurn=$("suggTurn");
+
+/* ---------------- Fairy-Stockfish + NNUE ---------------- */
 const fsf = {
-  sf: null, loading: false, curSerial: 0, _readyCb: null,
-  send(c) { if (this.sf) this.sf.postMessage(c); },
-  ready() { return new Promise((res) => { this._readyCb = res; this.send("isready"); }); },
-  nnue: false,
+  sf:null, nnue:false, _readyCb:null, curSerial:0, mode:null, multipv:1,
+  send(c){ if(this.sf) this.sf.postMessage(c); },
+  ready(){ return new Promise((res)=>{ this._readyCb=res; this.send("isready"); }); },
   async load(onProgress) {
     if (this.sf) return true;
     if (!window.crossOriginIsolated) throw new Error("ต้องมี cross-origin isolation");
-    await new Promise((res, rej) => {
-      const s = document.createElement("script");
-      s.src = FSF_DIR + "stockfish.js";
-      s.onload = res; s.onerror = () => rej(new Error("โหลดสคริปต์ไม่ได้"));
-      document.head.appendChild(s);
-    });
-    this.sf = await window.Stockfish({ locateFile: (p) => FSF_DIR + p });
-    this.sf.addMessageListener((l) => this.onLine(String(l)));
+    await new Promise((res,rej)=>{ const s=document.createElement("script");
+      s.src=FSF_DIR+"stockfish.js"; s.onload=res; s.onerror=()=>rej(new Error("โหลดสคริปต์ไม่ได้"));
+      document.head.appendChild(s); });
+    this.sf = await window.Stockfish({ locateFile:(p)=>FSF_DIR+p });
+    this.sf.addMessageListener((l)=>this.onLine(String(l)));
     this.send("uci");
     this.send("setoption name UCI_Variant value makruk");
     this.send("setoption name Hash value 192");
-    this.send("setoption name Threads value " +
-      Math.max(1, Math.min(6, (navigator.hardwareConcurrency || 2) - 1)));
+    this.send("setoption name Threads value " + Math.max(1, Math.min(6, (navigator.hardwareConcurrency||2)-1)));
     await this.ready();
-
-    // โหลดโครงข่ายประสาท NNUE ของ makruk (สมองที่ทำให้แข็งเท่า GodratSF+)
     try {
-      const buf = await this._fetchNet(FSF_DIR + "makruk.nnue", onProgress);
+      const buf = await this._fetchNet(FSF_DIR+"makruk.nnue", onProgress);
       this.sf.FS.writeFile("/makruk.nnue", new Uint8Array(buf));
       this.send("setoption name EvalFile value /makruk.nnue");
-      await this.ready();
-      this.nnue = true;
-    } catch (e) {
-      this.nnue = false;   // ใช้ classical eval ต่อ (ยังเล่นได้แต่แข็งน้อยกว่า)
-      console.warn("NNUE net load failed:", e);
-    }
+      await this.ready(); this.nnue = true;
+    } catch (e) { this.nnue = false; console.warn("NNUE:", e); }
     return true;
   },
   async _fetchNet(url, onProgress) {
-    // ลอง Cache API ก่อน (ดาวน์โหลดครั้งเดียว)
-    let cache = null;
-    try { cache = await caches.open("fsf-nnue-v1"); } catch (e) {}
-    if (cache) {
-      const hit = await cache.match(url);
-      if (hit) return hit.arrayBuffer();
-    }
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error("HTTP " + resp.status);
-    const total = +(resp.headers.get("content-length") || 0);
+    let cache=null; try { cache = await caches.open("fsf-nnue-v1"); } catch(e){}
+    if (cache) { const h = await cache.match(url); if (h) return h.arrayBuffer(); }
+    const resp = await fetch(url); if (!resp.ok) throw new Error("HTTP "+resp.status);
+    const total = +(resp.headers.get("content-length")||0);
     if (resp.body && total && onProgress) {
-      const reader = resp.body.getReader();
-      const chunks = []; let got = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value); got += value.length;
-        onProgress(got / total);
-      }
-      const out = new Uint8Array(got); let off = 0;
-      for (const c of chunks) { out.set(c, off); off += c.length; }
-      if (cache) try { await cache.put(url, new Response(out, { headers: { "content-type": "application/octet-stream" } })); } catch (e) {}
+      const rd = resp.body.getReader(); const ch=[]; let got=0;
+      for(;;){ const {done,value}=await rd.read(); if(done)break; ch.push(value); got+=value.length; onProgress(got/total); }
+      const out = new Uint8Array(got); let off=0; for(const c of ch){ out.set(c,off); off+=c.length; }
+      if (cache) try{ await cache.put(url, new Response(out)); }catch(e){}
       return out.buffer;
     }
     const ab = await resp.arrayBuffer();
-    if (cache) try { await cache.put(url, new Response(ab)); } catch (e) {}
+    if (cache) try{ await cache.put(url, new Response(ab)); }catch(e){}
     return ab;
   },
+  _setMultipv(n){ if (this.multipv !== n) { this.multipv = n; this.send("setoption name MultiPV value "+n); } },
   onLine(line) {
-    if (line === "readyok") { const c = this._readyCb; this._readyCb = null; if (c) c(); return; }
-    if (line.indexOf("info ") === 0 && line.indexOf(" pv ") > 0) {
-      if (this.curSerial !== goSerial) return;
-      const d = /\bdepth (\d+)/.exec(line);
-      const sc = /\bscore (cp|mate) (-?\d+)/.exec(line);
-      const nd = /\bnodes (\d+)/.exec(line);
-      const ns = /\bnps (\d+)/.exec(line);
-      onEngineMessage({
-        type: "info", serial: this.curSerial,
-        depth: d ? +d[1] : 0,
-        score: sc ? (sc[1] === "cp" ? +sc[2] : Math.sign(+sc[2]) * 29000) : 0,
-        scoreType: sc && sc[1] === "mate" ? "mate" : "cp",
-        mate: sc && sc[1] === "mate" ? +sc[2] : undefined,
-        nodes: nd ? +nd[1] : 0, nps: ns ? +ns[1] : 0,
-        pv: line.split(" pv ")[1].trim().split(/\s+/), pvSan: null,
-      });
-    } else if (line.indexOf("bestmove") === 0) {
+    if (line === "readyok") { const c=this._readyCb; this._readyCb=null; if(c) c(); return; }
+    if (line.indexOf("info ")===0 && line.indexOf(" pv ")>0) {
+      if (this.curSerial !== goSerial && this.mode !== "analyze") return;
+      const d=/\bdepth (\d+)/.exec(line), sc=/\bscore (cp|mate) (-?\d+)/.exec(line),
+            mp=/\bmultipv (\d+)/.exec(line), nd=/\bnodes (\d+)/.exec(line), ns=/\bnps (\d+)/.exec(line);
+      const pv = line.split(" pv ")[1].trim().split(/\s+/);
+      const score = sc ? (sc[1]==="cp" ? +sc[2] : Math.sign(+sc[2])*29000) : 0;
+      if (this.mode === "analyze") {
+        analysis.onFsfInfo({ idx:(mp?+mp[1]:1), score, mate:(sc&&sc[1]==="mate")?+sc[2]:undefined,
+          depth:d?+d[1]:0, pv, serial:this.curSerial });
+      } else {
+        onEngineMessage({ type:"info", serial:this.curSerial, depth:d?+d[1]:0, score,
+          scoreType:(sc&&sc[1]==="mate")?"mate":"cp", mate:(sc&&sc[1]==="mate")?+sc[2]:undefined,
+          nodes:nd?+nd[1]:0, nps:ns?+ns[1]:0, pv, pvSan:null });
+      }
+    } else if (line.indexOf("bestmove")===0) {
       const mv = line.split(/\s+/)[1];
-      onEngineMessage({
-        type: "bestmove", serial: this.curSerial,
-        move: mv && mv !== "(none)" ? mv : null, san: null,
-      });
+      if (this.mode === "analyze") analysis.onFsfDone(this.curSerial);
+      else onEngineMessage({ type:"bestmove", serial:this.curSerial, move:(mv&&mv!=="(none)")?mv:null, san:null });
+      this.mode = null;
     }
   },
-  go(kind) {
-    this.curSerial = goSerial;
-    this.send("position fen " + START_FEN_UCI +
-      (uciHistory.length ? " moves " + uciHistory.join(" ") : ""));
-    this.send("go movetime " + (kind === "hint" ? 900 : MOVE_TIME));
+  goMove(kind) {
+    this.mode = "move"; this.curSerial = goSerial; this._setMultipv(1);
+    this.send("position fen " + baseFen + (uciHistory.length ? " moves "+uciHistory.join(" ") : ""));
+    this.send("go movetime " + (kind==="hint" ? 900 : MOVE_TIME));
   },
-  stop() { this.send("stop"); },
-  newgame() { this.send("ucinewgame"); },
+  goAnalyze(serial) {
+    this.mode = "analyze"; this.curSerial = serial; this._setMultipv(6);
+    this.send("position fen " + baseFen + (uciHistory.length ? " moves "+uciHistory.join(" ") : ""));
+    this.send("go movetime " + ANALYZE_TIME);
+  },
+  stop(){ this.send("stop"); },
+  newgame(){ this.send("ucinewgame"); },
 };
 
-const FILES = "abcdefgh";
-const CH = { p:"P", n:"N", s:"S", m:"M", r:"R", k:"K" };
-// รูปตัวหมากจากโฟลเดอร์ design/ (ฝังเป็น data URI ตอน build) key = สี+ชนิด เช่น "wK","bP"
-// เบี้ยเลื่อนขั้นถูกแปลงเป็นเม็ดในเอนจิ้นอยู่แล้ว จึงใช้รูป "เม็ด" โดยอัตโนมัติ
-const PIECE_IMG = /*__PIECE_IMAGES__*/;
-const GLYPH = { P:"♟", N:"♞", S:"♝", M:"♛", R:"♜", K:"♚" };  // fallback ถ้าไม่มีรูป
-
-const boardEl = document.getElementById("board");
-const frameEl = document.getElementById("frame");
-const turnChip = document.getElementById("turnChip");
-const turnText = document.getElementById("turnText");
-const countPill = document.getElementById("countPill");
-const resultEl = document.getElementById("result");
-const engineStat = document.getElementById("engineStat");
-const movesEl = document.getElementById("moves");
-const evalWhite = document.getElementById("evalWhite");
-
-let ready = false;
-let board64 = [];
-let turn = "white";
-let humanSide = "white";
-let flipped = false;
-let legal = [];
-let selected = -1;
-let lastMove = null;
-let checkSq = -1;
-let sanList = [];
-let thinking = false;
-let gameOver = false;
-let pendingGo = null;       // 'engine' | 'force' | 'hint'
-let goSerial = 0;
-
+/* ---------------- engine message handler ---------------- */
 function onEngineMessage(m) {
   switch (m.type) {
     case "ready":
       ready = true; bootstrapped = true;
-      post({ type: "loadbook", book: BOOK });
-      // บอทเล่นเต็มกำลังเสมอ (เอนจิ้น default = Best Move) ไม่มีการปรับระดับ
+      post({ type:"loadbook", book:BOOK });
       newGame();
       break;
     case "state":
-      turn = m.turn; parseFen(m.fen);
+      turn = m.turn; parseFen(m.fen); baseFenLive = m.fen;
       checkSq = m.inCheck ? findKing(turn) : -1;
       renderCount(m.counting); render(); renderMoves(); verdict(m.gameOver); sizeBoard();
-      post({ type: "legal" });
-      if (!gameOver && !thinking && !pendingGo) {
-        const yours = turn === humanSide;
-        turnText.textContent = (turn === "white" ? "ตาขาว" : "ตาดำ") +
-          (yours ? " — ตาคุณ" : "") + (m.inCheck ? " · ถูกรุก!" : "");
-      }
+      post({ type:"legal" });
+      updateTurnText(m.inCheck);
       maybeEngineMove();
+      refreshSuggestions();
       break;
     case "legal": legal = m.moves; render(); break;
     case "moved":
       sanList.push(m.san || m.uci);
-      uciHistory.push(m.uci.replace("=M", "m").replace("=", ""));  // uci สำหรับ Fairy-SF
-      lastMove = { from: sqIdx(m.uci.slice(0, 2)), to: sqIdx(m.uci.slice(2, 4)) };
-      renderMoves(); post({ type: "eval" });
+      uciHistory.push(m.uci.replace("=M","m").replace("=",""));
+      lastMove = { from:sqIdx(m.uci.slice(0,2)), to:sqIdx(m.uci.slice(2,4)) };
+      hintArrow = null;
+      renderMoves(); post({ type:"eval" });
       break;
     case "info": showInfo(m); break;
     case "bestmove": {
@@ -528,141 +495,137 @@ function onEngineMessage(m) {
       const kind = pendingGo; pendingGo = null;
       if (m.serial !== goSerial) break;
       if (kind === "hint") {
-        if (m.move) { selected = sqIdx(m.move.slice(0, 2)); render(); turnText.textContent = "แนะนำ: " + (m.san || m.move); }
+        if (m.move) { hintArrow = { from:sqIdx(m.move.slice(0,2)), to:sqIdx(m.move.slice(2,4)) };
+          render(); turnText.textContent = "แนะนำ: " + (m.move); }
       } else if (m.move && !gameOver) {
-        post({ type: "domove", uci: m.move });
-      } else if (!m.move) {
-        turnText.textContent = "บอทไม่มีหมากเดิน";
-      }
+        post({ type:"domove", uci:m.move });
+      } else if (!m.move) { turnText.textContent = "บอทไม่มีหมากเดิน"; }
       break;
     }
+    case "analysis": analysis.onJsResult(m); break;
     case "eval": setEval(m.cp); break;
-    case "error": engineStat.textContent = "ผิดพลาด: " + m.message; thinking = false; frameEl.classList.remove("is-thinking"); break;
+    case "error": engineStat.textContent = "ผิดพลาด: " + m.message;
+      thinking = false; frameEl.classList.remove("is-thinking"); break;
   }
 }
+let baseFenLive = START_FEN;
 
-function newGame() {
-  sanList = []; uciHistory = []; selected = -1; lastMove = null; gameOver = false;
-  pendingGo = null; goSerial++;
-  if (fsf.sf) { fsf.stop(); fsf.newgame(); }
-  resultEl.textContent = "";
-  post({ type: "newgame" });
-  post({ type: "eval" });
+function updateTurnText(inChk) {
+  if (gameOver || thinking || pendingGo) return;
+  if (mode === "2p") turnText.textContent = (turn==="white"?"ตาขาว":"ตาดำ") + " (2 คน)" + (inChk?" · ถูกรุก!":"");
+  else turnText.textContent = (turn==="white"?"ตาขาว":"ตาดำ") + (turn===humanSide?" — ตาคุณ":"") + (inChk?" · ถูกรุก!":"");
 }
 
-const MOVE_TIME = 1800;   // เวลาคิดต่อตา (คงที่) — ให้บอทคิดลึกขึ้น
+/* ---------------- game flow ---------------- */
+function newGame() {
+  baseFen = START_FEN; sanList = []; uciHistory = []; selected = -1; lastMove = null;
+  hintArrow = null; gameOver = false; pendingGo = null; goSerial++;
+  if (fsf.sf) { fsf.stop(); fsf.newgame(); }
+  resultEl.textContent = ""; engineStat.textContent = "";
+  post({ type:"newgame" }); post({ type:"eval" });
+}
+function newGameFromFen(fen) {
+  baseFen = fen; sanList = []; uciHistory = []; selected = -1; lastMove = null;
+  hintArrow = null; gameOver = false; pendingGo = null; goSerial++;
+  if (fsf.sf) { fsf.stop(); fsf.newgame(); }
+  resultEl.textContent = ""; engineStat.textContent = "";
+  post({ type:"position", fen }); post({ type:"eval" });
+}
 function startGo(kind) {
   pendingGo = kind; thinking = true; goSerial++;
   frameEl.classList.add("is-thinking");
-  turnText.textContent = kind === "hint" ? "กำลังหาคำแนะนำ…" : "บอทกำลังคิด…";
-  if (brain === "fsf" && fsf.sf) fsf.go(kind);
-  else post({ type: "go", serial: goSerial, movetime: kind === "hint" ? 900 : MOVE_TIME });
+  turnText.textContent = kind==="hint" ? "กำลังหาคำแนะนำ…" : "บอทกำลังคิด…";
+  analysis.cancel();
+  if (brain === "fsf" && fsf.sf) fsf.goMove(kind);
+  else post({ type:"go", serial:goSerial, movetime: kind==="hint" ? 900 : MOVE_TIME });
 }
 function maybeEngineMove() {
-  if (gameOver || thinking || pendingGo) return;
+  if (mode !== "bot" || gameOver || thinking || pendingGo) return;
   if (turn !== humanSide) startGo("engine");
 }
-
 function verdict(v) {
   if (!v || !v.over) { gameOver = false; return; }
   gameOver = true;
   const TH = { checkmate:"รุกจน", stalemate:"อับ — เสมอ", threefold:"ตำแหน่งซ้ำ 3 ครั้ง — เสมอ",
     "fifty-move":"50 ตาไม่คืบหน้า — เสมอ", counting:"ครบการนับ — เสมอ", "insufficient-material":"กำลังไม่พอ — เสมอ" };
-  const who = v.winner ? (v.winner === "white" ? " · ขาวชนะ" : " · ดำชนะ") : "";
-  resultEl.textContent = (TH[v.reason] || v.reason) + who;
+  const who = v.winner ? (v.winner==="white"?" · ขาวชนะ":" · ดำชนะ") : "";
+  resultEl.textContent = (TH[v.reason]||v.reason) + who;
 }
 
-// ---------- interaction ----------
-function onClick(idx) {
-  if (thinking || gameOver || turn !== humanSide) return;
+/* ---------------- board interaction ---------------- */
+function onSquare(idx) {
+  if (mode === "setup") return setupClick(idx);
+  if (thinking || gameOver) return;
+  const myTurn = (mode === "2p") || (turn === humanSide);
+  if (!myTurn) return;
   const p = board64[idx];
-  if (selected === -1) { if (p && p.c === humanSide[0]) sel(idx); return; }
+  const meColor = turn === "white" ? "w" : "b";
+  if (selected === -1) { if (p && p.c === meColor) sel(idx); return; }
   if (idx === selected) { selected = -1; render(); return; }
   const u = sqName(selected) + sqName(idx);
   const hit = legal.find((mv) => mv.startsWith(u));
-  if (hit) { selected = -1; post({ type: "domove", uci: hit }); turnText.textContent = "ตาบอท"; }
-  else if (p && p.c === humanSide[0]) sel(idx);
+  if (hit) { selected = -1; hintArrow = null; post({ type:"domove", uci:hit }); }
+  else if (p && p.c === meColor) sel(idx);
   else { selected = -1; render(); }
 }
-function sel(i) { selected = i; render(); }
+function sel(i){ selected = i; render(); }
 
-// ---------- ปรับขนาดกระดานให้พอดีคอลัมน์ (กันล้น เมื่อมีแผงข้าง) ----------
-const wrapEl = document.querySelector(".wrap");
-function sizeBoard() {
-  const stage = boardEl.closest(".board-stage");
-  const col = stage && stage.parentElement;        // <section>
-  const avail = col ? col.clientWidth : 0;
-  if (!avail) return;                              // ยังไม่ layout / ซ่อนอยู่ -> ใช้ค่า CSS
-  const pad = parseFloat(getComputedStyle(frameEl).paddingLeft) || 16;
-  const px = Math.max(200, Math.min(560, Math.floor(avail - 14 /*evalbar*/ - 12 /*gap*/ - pad * 2)));
-  wrapEl.style.setProperty("--board-size", px + "px");
-}
-window.addEventListener("resize", sizeBoard);
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizeBoard);
-requestAnimationFrame(sizeBoard);
-setTimeout(sizeBoard, 120);
-setTimeout(sizeBoard, 600);
-
-// ---------- rendering ----------
+/* ---------------- rendering ---------------- */
 function parseFen(f) {
   board64 = new Array(64).fill(null);
   const rows = f.split(/\s+/)[0].split("/");
-  for (let i = 0; i < 8; i++) {
-    const rank = 7 - i; let file = 0;
+  for (let i=0;i<8;i++){ const rank=7-i; let file=0;
     for (const ch of rows[i]) {
-      if (ch >= "1" && ch <= "9") { file += +ch; continue; }
-      const low = ch.toLowerCase();
-      board64[rank * 8 + file] = { c: ch === low ? "b" : "w", t: CH[low] };
-      file++;
+      if (ch>="1"&&ch<="9"){ file+=+ch; continue; }
+      const low=ch.toLowerCase(); board64[rank*8+file]={ c:ch===low?"b":"w", t:CH[low] }; file++;
     }
   }
 }
-function findKing(s) { const w = s === "white" ? "w" : "b"; for (let i = 0; i < 64; i++){ const p = board64[i]; if (p && p.t === "K" && p.c === w) return i; } return -1; }
-function sqName(i) { return FILES[i & 7] + ((i >> 3) + 1); }
-function sqIdx(s) { return (s.charCodeAt(0) - 97) + (s.charCodeAt(1) - 49) * 8; }
-
+function findKing(s){ const w=s==="white"?"w":"b"; for(let i=0;i<64;i++){ const p=board64[i]; if(p&&p.t==="K"&&p.c===w) return i; } return -1; }
+function sqName(i){ return FILES[i&7] + ((i>>3)+1); }
+function sqIdx(s){ return (s.charCodeAt(0)-97) + (s.charCodeAt(1)-49)*8; }
+function pieceEl(p) {
+  const pe = document.createElement("div"); pe.className = "piece";
+  const src = PIECE_IMG[p.c + p.t];
+  if (src) pe.style.backgroundImage = 'url("'+src+'")';
+  else { pe.textContent = GLYPH[p.t]; pe.style.cssText += ";display:flex;align-items:center;justify-content:center;font-size:min(6vw,40px);color:"+(p.c==="w"?"#f0e2c1":"#2b2013"); }
+  return pe;
+}
 function render() {
   const order = [];
-  for (let r = 7; r >= 0; r--) for (let f = 0; f < 8; f++) order.push(r * 8 + f);
+  for (let r=7;r>=0;r--) for (let f=0;f<8;f++) order.push(r*8+f);
   const cells = flipped ? order.slice().reverse() : order;
-  const hints = selected >= 0
-    ? legal.filter((mv) => mv.slice(0, 2) === sqName(selected)).map((mv) => sqIdx(mv.slice(2, 4)))
-    : [];
+  const src = mode === "setup" ? editBoard : board64;
+  const hints = (mode !== "setup" && selected >= 0)
+    ? legal.filter((mv)=>mv.slice(0,2)===sqName(selected)).map((mv)=>sqIdx(mv.slice(2,4))) : [];
   const frag = document.createDocumentFragment();
   for (const idx of cells) {
     const f = idx & 7, r = idx >> 3;
     const el = document.createElement("div");
-    el.className = "sq";
-    el.setAttribute("role", "gridcell");
-    if (idx === selected) el.classList.add("sel");
-    if (lastMove && (idx === lastMove.from || idx === lastMove.to)) el.classList.add("last");
-    if (idx === checkSq) el.classList.add("chk");
-    if (hints.includes(idx)) { el.classList.add("mv"); if (board64[idx]) el.classList.add("cap"); }
-    const edgeFile = flipped ? 7 : 0, edgeRank = flipped ? 7 : 0;
-    if (r === edgeRank) { const c = document.createElement("span"); c.className = "sq__co f"; c.textContent = FILES[f]; el.appendChild(c); }
-    if (f === edgeFile) { const c = document.createElement("span"); c.className = "sq__co r"; c.textContent = r + 1; el.appendChild(c); }
-    const p = board64[idx];
-    if (p) {
-      const pe = document.createElement("div");
-      pe.className = "piece";
-      const src = PIECE_IMG[p.c + p.t];
-      if (src) pe.style.backgroundImage = 'url("' + src + '")';
-      else { pe.textContent = GLYPH[p.t]; pe.style.cssText += ';display:flex;align-items:center;justify-content:center;font-size:min(6vw,40px);color:' + (p.c === "w" ? "#f0e2c1" : "#2b2013"); }
-      el.appendChild(pe);
+    el.className = "sq"; el.setAttribute("role","gridcell");
+    if (mode !== "setup") {
+      if (idx === selected) el.classList.add("sel");
+      if (lastMove && (idx===lastMove.from || idx===lastMove.to)) el.classList.add("last");
+      if (idx === checkSq) el.classList.add("chk");
+      if (hints.includes(idx)) { el.classList.add("mv"); if (src[idx]) el.classList.add("cap"); }
+      if (hintArrow && idx === hintArrow.from) el.classList.add("hintfrom");
+      if (hintArrow && idx === hintArrow.to) el.classList.add("hintto");
     }
-    el.addEventListener("click", () => onClick(idx));
+    const edgeF = flipped ? 7 : 0, edgeR = flipped ? 7 : 0;
+    if (r === edgeR) { const c=document.createElement("span"); c.className="sq__co f"; c.textContent=TFILE[f]; el.appendChild(c); }
+    if (f === edgeF) { const c=document.createElement("span"); c.className="sq__co r"; c.textContent=r+1; el.appendChild(c); }
+    if (src[idx]) el.appendChild(pieceEl(src[idx]));
+    el.addEventListener("click", () => onSquare(idx));
     frag.appendChild(el);
   }
   boardEl.replaceChildren(frag);
-  turnChip.className = "chip " + (turn === "white" ? "w" : "b");
+  turnChip.className = "chip " + (turn==="white"?"w":"b");
 }
-
 function renderMoves() {
   const frag = document.createDocumentFragment();
-  for (let i = 0; i < sanList.length; i += 2) {
-    const row = document.createElement("div");
-    row.className = "row";
-    row.innerHTML = `<span class="n">${i / 2 + 1}.</span><span>${sanList[i] || ""}</span><span>${sanList[i + 1] || ""}</span>`;
+  for (let i=0;i<sanList.length;i+=2) {
+    const row = document.createElement("div"); row.className = "row";
+    row.innerHTML = `<span class="n">${i/2+1}.</span><span>${sanList[i]||""}</span><span>${sanList[i+1]||""}</span>`;
     frag.appendChild(row);
   }
   movesEl.replaceChildren(frag);
@@ -673,98 +636,295 @@ function renderCount(c) {
   else { countPill.textContent = "ยังไม่เริ่มนับ"; countPill.classList.remove("on"); }
 }
 function showInfo(m) {
-  const sc = m.scoreType === "mate" ? "รุกจน #" + Math.abs(m.mate) : (m.score / 100).toFixed(2);
-  turnText.textContent = (turn === "white" ? "ตาขาว" : "ตาดำ");
-  const pv = (m.pvSan && m.pvSan.length ? m.pvSan : (m.pv || [])).slice(0, 10).join(" ");
-  engineStat.innerHTML =
-    `ระดับลึก <b>${m.depth}</b> · แต้ม <b>${sc}</b><br>` +
-    `<b>${(m.nodes / 1000 | 0).toLocaleString()}k</b> ตำแหน่ง · <b>${(m.nps / 1000 | 0).toLocaleString()}k</b>/วิ` +
-    `<span class="pv">${pv}</span>`;
-  setEval(turn === "white" ? m.score : -m.score);
+  const sc = m.scoreType==="mate" ? "รุกจน #"+Math.abs(m.mate) : (m.score/100).toFixed(2);
+  engineStat.innerHTML = `บอทคิด: ระดับลึก <b>${m.depth}</b> · แต้ม <b>${sc}</b>`;
+  setEval(turn==="white" ? m.score : -m.score);
 }
 function setEval(cpWhite) {
-  const c = Math.max(-900, Math.min(900, cpWhite || 0));
-  evalWhite.style.height = (50 + c / 18) + "%";
+  const c = Math.max(-900, Math.min(900, cpWhite||0));
+  evalWhite.style.height = (50 + c/18) + "%";
 }
 
-// ---------- controls ----------
-document.getElementById("new").addEventListener("click", () => ready && newGame());
-document.getElementById("undo").addEventListener("click", () => {
-  if (!ready || thinking) return;
-  const back = Math.min(sanList.length, turn === humanSide ? 2 : 1);
+/* ---------------- board sizing ---------------- */
+const wrapEl = document.querySelector(".wrap");
+function sizeBoard() {
+  const col = boardEl.closest(".col-board");
+  const avail = col ? col.clientWidth : 0;
+  if (!avail) return;
+  const pad = parseFloat(getComputedStyle(frameEl).paddingLeft) || 16;
+  const px = Math.max(200, Math.min(560, Math.floor(avail - 14 - 12 - pad*2)));
+  wrapEl.style.setProperty("--board-size", px + "px");
+}
+window.addEventListener("resize", sizeBoard);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizeBoard);
+requestAnimationFrame(sizeBoard); setTimeout(sizeBoard,120); setTimeout(sizeBoard,600);
+
+/* ================= แนะนำตาเดิน (analysis) ================= */
+const analysis = {
+  serial: 0, running: false, fsfRows: {},
+  cancel() { this.serial++; this.running = false; if (fsf.sf && fsf.mode === "analyze") { fsf.stop(); fsf.mode = null; } },
+  clearUI(msg) { suggList.innerHTML = `<div class="sugg-meta">${msg||""}</div>`; suggMeta.textContent = ""; },
+  shouldRun() {
+    if (mode === "setup" || gameOver || thinking || pendingGo) return false;
+    if (mode === "bot" && turn !== humanSide) return false;   // ตาบอท — ไม่ต้องแนะนำ
+    return true;
+  },
+  request() {
+    this.cancel();
+    if (!this.shouldRun()) { this.clearUI(mode==="bot"&&turn!==humanSide ? "— ตาบอท —" : "—"); return; }
+    const s = ++this.serial; this.running = true;
+    suggTurn.textContent = "(ฝ่าย" + (turn==="white"?"ขาว":"ดำ") + ")";
+    this.clearUI("กำลังวิเคราะห์…");
+    if (brain === "fsf" && fsf.sf) { this.fsfRows = {}; fsf.goAnalyze(s); }
+    else post({ type:"analyze", serial:s, movetime:ANALYZE_TIME });
+  },
+  onFsfInfo(d) {
+    if (d.serial !== this.serial) return;
+    this.fsfRows[d.idx] = { uci:d.pv[0], score:d.score, mate:d.mate, depth:d.depth };
+  },
+  onFsfDone(serial) {
+    if (serial !== this.serial) return;
+    this.running = false;
+    const rows = Object.values(this.fsfRows).filter(r => r && r.uci);
+    this._renderRows(rows, "Fairy-Stockfish" + (fsf.nnue?" + NNUE":""), rows[0] ? rows[0].depth : 0);
+  },
+  onJsResult(m) {
+    if (m.serial !== this.serial) return;
+    this.running = false;
+    const rows = (m.moves||[]).map(x => ({ uci:x.uci, san:x.san, score:x.score }));
+    this._renderRows(rows, "เอนจิ้น JS", m.depth||0);
+  },
+  _renderRows(rows, engineName, depth) {
+    rows = rows.filter(r => r && r.uci).sort((a,b)=> (b.score) - (a.score));
+    if (!rows.length) { this.clearUI("— ไม่มีตาเดิน —"); return; }
+    const best = rows[0].score;
+    // คัดเฉพาะตาดี+ปานกลาง: ภายใน 150 แต้มจากตาดีสุด (แต่อย่างน้อย 3 ตา)
+    let keep = rows.filter(r => r.score >= best - 150);
+    if (keep.length < 3) keep = rows.slice(0, Math.min(4, rows.length));
+    keep = keep.slice(0, 6);
+    const frag = document.createDocumentFragment();
+    keep.forEach((r,i) => {
+      const div = document.createElement("div");
+      div.className = "sugg" + (i===0 ? " best" : "");
+      const scNum = r.mate !== undefined ? (r.mate>0?99:-99) : r.score/100;
+      const scTxt = r.mate !== undefined ? ("#"+Math.abs(r.mate)) : (scNum>=0?"+":"") + scNum.toFixed(2);
+      const dl = i===0 ? "ดีสุด" : ((r.score-best)/100).toFixed(2);
+      div.innerHTML =
+        `<span class="rank">${i+1}</span>` +
+        `<span class="mv">${r.san ? thai(r.san) : fmtMove(r.uci)}</span>` +
+        `<span><span class="sc ${scNum>=0?"pos":"neg"}">${scTxt}</span> <span class="dl">${dl}</span></span>`;
+      div.addEventListener("click", () => playSuggestion(r.uci));
+      div.addEventListener("mouseenter", () => { hintArrow = { from:sqIdx(r.uci.slice(0,2)), to:sqIdx(r.uci.slice(2,4)) }; render(); });
+      div.addEventListener("mouseleave", () => { hintArrow = null; render(); });
+      frag.appendChild(div);
+    });
+    suggList.replaceChildren(frag);
+    suggMeta.textContent = engineName + " · ระดับลึก " + depth + " · แต้ม + = ดีต่อฝ่ายที่ต้องเดิน";
+  },
+};
+function thai(san) { return String(san).replace(/[a-h]/g, (c)=>TFILE["abcdefgh".indexOf(c)]); }
+function fmtMove(uci) { return thai(uci.slice(0,2)) + "→" + thai(uci.slice(2,4)) + (uci.length>4 ? " ⇑" : ""); }
+function playSuggestion(uci) {
+  if (mode === "setup" || gameOver || thinking || pendingGo) return;
+  const myTurn = (mode === "2p") || (turn === humanSide);
+  if (!myTurn) return;
+  selected = -1; hintArrow = null;
+  post({ type:"domove", uci });
+}
+function refreshSuggestions() { clearTimeout(refreshSuggestions._t); refreshSuggestions._t = setTimeout(()=>analysis.request(), 120); }
+
+/* ================= ระบบตั้งหมาก ================= */
+let editBoard = [], editTurn = "white", editTool = "wP";
+function enterSetup() {
+  editBoard = board64.map(p => p ? { c:p.c, t:p.t } : null);
+  editTurn = turn;
+  $("setupTurn").textContent = "ฝ่ายเดิน: " + (editTurn==="white"?"ขาว":"ดำ");
+  buildPalette();
+  frameEl.classList.add("setup"); frameEl.classList.remove("is-thinking");
+  selected = -1; hintArrow = null; analysis.cancel(); analysis.clearUI("— โหมดตั้งหมาก —");
+  render(); validateSetup();
+}
+function exitSetup() { frameEl.classList.remove("setup"); }
+function buildPalette() {
+  const el = $("palette"); el.innerHTML = "";
+  const specs = [["wK"],["wM"],["wR"],["wN"],["wS"],["wP"],["erase"],
+                 ["bK"],["bM"],["bR"],["bN"],["bS"],["bP"],[""]];
+  for (const [k] of specs) {
+    const b = document.createElement("button"); b.type = "button";
+    if (k === "erase") { b.className = "erase"; b.textContent = "🚫"; b.dataset.tool = "erase"; }
+    else if (k === "") { b.style.visibility = "hidden"; }
+    else {
+      b.dataset.tool = k;
+      const img = document.createElement("img"); img.src = PIECE_IMG[k] || ""; img.alt = k; b.appendChild(img);
+    }
+    if (k === editTool) b.classList.add("on");
+    b.addEventListener("click", () => {
+      if (!b.dataset.tool) return;
+      editTool = b.dataset.tool;
+      [...el.children].forEach(x => x.classList.toggle("on", x.dataset.tool === editTool));
+    });
+    el.appendChild(b);
+  }
+}
+function pieceCount(bd, c, t, exceptIdx) {
+  let n = 0; for (let i=0;i<64;i++){ if (i===exceptIdx) continue; const p=bd[i]; if (p && p.c===c && p.t===t) n++; }
+  return n;
+}
+function setupClick(idx) {
+  if (editTool === "erase") { editBoard[idx] = null; render(); validateSetup(); return; }
+  const c = editTool[0], t = editTool[1];
+  const r = idx >> 3;
+  if (t === "P" && (r === 0 || r === 7)) { flashMsg("วางเบี้ยแถวแรก/แถวสุดท้ายไม่ได้"); return; }
+  const max = PIECE_MAX[t] || 8;
+  if (pieceCount(editBoard, c, t, idx) >= max) {
+    flashMsg((c==="w"?"ขาว":"ดำ") + " " + thName(t) + " มีได้ไม่เกิน " + max);
+    return;
+  }
+  editBoard[idx] = { c, t };
+  render(); validateSetup();
+}
+function thName(t){ return ({K:"ขุน",M:"เม็ด",R:"เรือ",N:"ม้า",S:"โคน",P:"เบี้ย"})[t]; }
+function flashMsg(s) { const m=$("setupMsg"); m.textContent = s; m.className = "msg bad"; clearTimeout(flashMsg._t); flashMsg._t = setTimeout(validateSetup, 1600); }
+function fenFromEdit() {
+  let pl = "";
+  for (let rank=7; rank>=0; rank--) {
+    let e = 0;
+    for (let file=0; file<8; file++) {
+      const p = editBoard[rank*8+file];
+      if (!p) { e++; continue; }
+      if (e) { pl += e; e = 0; }
+      const ch = { K:"k",M:"m",R:"r",N:"n",S:"s",P:"p" }[p.t];
+      pl += p.c === "w" ? ch.toUpperCase() : ch;
+    }
+    if (e) pl += e;
+    if (rank) pl += "/";
+  }
+  return pl + " " + (editTurn==="white"?"w":"b") + " - - 0 1";
+}
+function validateSetup() {
+  const m = $("setupMsg");
+  const wk = pieceCount(editBoard,"w","K",-1), bk = pieceCount(editBoard,"b","K",-1);
+  if (wk !== 1 || bk !== 1) { m.textContent = "ต้องมีขุนฝ่ายละ 1 ตัว"; m.className = "msg bad"; $("setupPlay").disabled = true; return; }
+  // ขุนติดกันไม่ได้
+  let wKi=-1,bKi=-1; for(let i=0;i<64;i++){ const p=editBoard[i]; if(p&&p.t==="K"){ if(p.c==="w")wKi=i; else bKi=i; } }
+  if (Math.abs((wKi&7)-(bKi&7))<=1 && Math.abs((wKi>>3)-(bKi>>3))<=1) { m.textContent = "ขุนสองฝ่ายอยู่ติดกันไม่ได้"; m.className = "msg bad"; $("setupPlay").disabled = true; return; }
+  m.textContent = "ตำแหน่งใช้ได้ ✓"; m.className = "msg ok"; $("setupPlay").disabled = false;
+}
+
+/* ================= controls ================= */
+$("modeSel").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-mode]"); if (!b) return;
+  const want = b.dataset.mode;
+  if (want === mode) return;
+  [...$("modeSel").children].forEach(x => x.classList.toggle("on", x.dataset.mode === want));
+
+  if (mode === "setup" && want !== "setup") exitSetup();
+  const prev = mode; mode = want;
+
+  $("playControls").hidden = (mode === "setup");
+  $("setupControls").hidden = (mode !== "setup");
+  document.querySelectorAll("[data-botmode]").forEach(x => x.hidden = (mode !== "bot"));
+
+  if (mode === "setup") { enterSetup(); return; }
+  if (prev === "setup") {
+    // ออกจากตั้งหมาก -> เริ่มเกมจากตำแหน่งที่ตั้ง (ถ้า valid) มิฉะนั้นคงเดิม
+    if (!$("setupPlay").disabled) newGameFromFen(fenFromEdit());
+  }
+  if (mode === "bot") { thinking = false; pendingGo = null; maybeEngineMove(); }
+  refreshSuggestions();
+  updateTurnText(false);
+});
+
+$("new").addEventListener("click", () => { if (ready && mode !== "setup") newGame(); });
+$("undo").addEventListener("click", () => {
+  if (!ready || thinking || mode === "setup") return;
+  const backTo = (mode === "2p") ? 1 : (turn === humanSide ? 2 : 1);
+  const back = Math.min(sanList.length, backTo);
   if (!back) return;
-  for (let i = 0; i < back; i++) { sanList.pop(); uciHistory.pop(); }
-  gameOver = false; resultEl.textContent = ""; lastMove = null;
-  post({ type: "undo", count: back }); post({ type: "eval" });
+  for (let i=0;i<back;i++){ sanList.pop(); uciHistory.pop(); }
+  gameOver = false; resultEl.textContent = ""; lastMove = null; hintArrow = null;
+  post({ type:"undo", count:back }); post({ type:"eval" });
 });
-document.getElementById("flip").addEventListener("click", () => { flipped = !flipped; render(); });
-document.getElementById("hint").addEventListener("click", () => { if (ready && !thinking) startGo("hint"); });
-document.getElementById("gonow").addEventListener("click", () => { if (ready && !thinking && !gameOver) startGo("force"); });
-document.getElementById("side").addEventListener("click", () => {
+$("flip").addEventListener("click", () => { flipped = !flipped; render(); });
+$("hint").addEventListener("click", () => { if (ready && !thinking && mode !== "setup") startGo("hint"); });
+$("gonow").addEventListener("click", () => { if (ready && !thinking && !gameOver && mode === "bot") startGo("force"); });
+$("side").addEventListener("click", () => {
   humanSide = humanSide === "white" ? "black" : "white";
-  document.getElementById("side").textContent = "คุณเล่น: " + (humanSide === "white" ? "ขาว" : "ดำ");
-  flipped = humanSide === "black"; render(); maybeEngineMove();
+  $("side").textContent = "คุณเล่น: " + (humanSide==="white"?"ขาว":"ดำ");
+  flipped = humanSide === "black"; render(); maybeEngineMove(); refreshSuggestions();
 });
 
-// ---------- brain selector: JS engine  <->  Fairy-Stockfish ----------
-const brainNote = document.getElementById("brainNote");
-function setBrainUI(b) {
-  document.querySelectorAll(".brainsel button").forEach((x) => x.classList.toggle("on", x.dataset.brain === b));
-}
-document.querySelectorAll(".brainsel button").forEach((btn) => {
+$("setupTurn").addEventListener("click", () => {
+  editTurn = editTurn === "white" ? "black" : "white";
+  $("setupTurn").textContent = "ฝ่ายเดิน: " + (editTurn==="white"?"ขาว":"ดำ");
+  turn = editTurn; render(); validateSetup();
+});
+$("setupClear").addEventListener("click", () => { editBoard = new Array(64).fill(null); render(); validateSetup(); });
+$("setupStart").addEventListener("click", () => { parseFen(START_FEN); editBoard = board64.map(p=>p?{c:p.c,t:p.t}:null); editTurn="white"; $("setupTurn").textContent="ฝ่ายเดิน: ขาว"; render(); validateSetup(); });
+$("setupPlay").addEventListener("click", () => {
+  if ($("setupPlay").disabled) return;
+  const fen = fenFromEdit();
+  mode = (prevPlayMode || "bot"); exitSetup();
+  [...$("modeSel").children].forEach(x => x.classList.toggle("on", x.dataset.mode === mode));
+  $("playControls").hidden = false; $("setupControls").hidden = true;
+  document.querySelectorAll("[data-botmode]").forEach(x => x.hidden = (mode !== "bot"));
+  newGameFromFen(fen);
+});
+let prevPlayMode = "bot";
+// จำโหมดเล่นก่อนเข้า setup
+$("modeSel").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-mode]");
+  if (b && b.dataset.mode === "setup" && (mode === "bot" || mode === "2p")) prevPlayMode = mode;
+}, true);
+
+/* ---------------- brain selector ---------------- */
+function setBrainUI(b){ document.querySelectorAll("[data-brain]").forEach((x)=>x.classList.toggle("on", x.dataset.brain===b)); }
+document.querySelectorAll("[data-brain]").forEach((btn) => {
   btn.addEventListener("click", async () => {
     const want = btn.dataset.brain;
     if (want === brain || thinking || btn.disabled) return;
-
     if (want === "js") {
       if (fsf.sf) fsf.stop();
       brain = "js"; goSerial++; pendingGo = null; thinking = false;
-      frameEl.classList.remove("is-thinking");
-      setBrainUI("js");
-      brainNote.textContent = "เอนจิ้น JS (เบา · ทำงานได้ทุกที่ · Best Move)";
-      maybeEngineMove();
+      frameEl.classList.remove("is-thinking"); setBrainUI("js");
+      brainNote.textContent = "เอนจิ้น JS (เบา · ทำงานได้ทุกที่)";
+      maybeEngineMove(); refreshSuggestions();
       return;
     }
-
-    // want === "fsf"
     if (!window.crossOriginIsolated) {
-      brainNote.innerHTML = "Fairy-Stockfish ใช้ไม่ได้ในหน้านี้ (ไม่มี cross-origin isolation) — " +
-        'เปิดเวอร์ชันเต็มที่ <a href="https://hatalu.github.io/makrukpjame/" target="_blank" rel="noopener">hatalu.github.io/makrukpjame</a>';
+      brainNote.innerHTML = "Fairy-Stockfish ใช้ไม่ได้ในหน้านี้ — เปิดที่ " +
+        '<a href="https://hatalu.github.io/makrukpjame/" target="_blank" rel="noopener">hatalu.github.io/makrukpjame</a>';
       return;
     }
     btn.disabled = true;
     brainNote.textContent = "กำลังโหลด Fairy-Stockfish…";
     try {
       await fsf.load((frac) => {
-        brainNote.textContent = "กำลังโหลดโครงข่ายประสาท NNUE (makruk) — " +
-          Math.round(frac * 100) + "% · ~48 MB ครั้งเดียว (จำไว้ในเบราว์เซอร์)";
+        brainNote.textContent = "โหลดโครงข่าย NNUE (makruk) — " + Math.round(frac*100) + "% · ~48 MB ครั้งเดียว";
       });
       brain = "fsf"; goSerial++; pendingGo = null; thinking = false;
-      frameEl.classList.remove("is-thinking");
-      setBrainUI("fsf");
+      frameEl.classList.remove("is-thinking"); setBrainUI("fsf");
       brainNote.textContent = fsf.nnue
-        ? "Fairy-Stockfish + NNUE พร้อม · variant makruk · เต็มพลัง (คอร์เดียวกับ GodratSF+)"
-        : "Fairy-Stockfish พร้อม (classical eval — โหลด NNUE ไม่ได้) · ยังแข็งกว่าเอนจิ้น JS";
-      maybeEngineMove();
+        ? "Fairy-Stockfish + NNUE พร้อม · คอร์เดียวกับ GodratSF+"
+        : "Fairy-Stockfish พร้อม (classical eval)";
+      maybeEngineMove(); refreshSuggestions();
     } catch (e) {
-      brainNote.textContent = "โหลด Fairy-Stockfish ไม่สำเร็จ: " + (e && e.message || e) + " — ใช้เอนจิ้น JS ต่อ";
-    } finally {
-      btn.disabled = false;
-    }
+      brainNote.textContent = "โหลดไม่สำเร็จ: " + (e && e.message || e) + " — ใช้เอนจิ้น JS ต่อ";
+    } finally { btn.disabled = false; }
   });
 });
 
-// theme toggle (system → light → dark → system)
-const themeBtn = document.getElementById("themeBtn");
+/* ---------------- theme ---------------- */
+const themeBtn = $("themeBtn");
 let themeMode = "system";
 themeBtn.addEventListener("click", () => {
-  themeMode = themeMode === "system" ? "light" : themeMode === "light" ? "dark" : "system";
+  themeMode = themeMode==="system" ? "light" : themeMode==="light" ? "dark" : "system";
   if (themeMode === "system") document.documentElement.removeAttribute("data-theme");
   else document.documentElement.setAttribute("data-theme", themeMode);
-  themeBtn.textContent = themeMode === "system" ? "โหมด: ตามระบบ" : themeMode === "light" ? "โหมด: สว่าง" : "โหมด: มืด";
+  themeBtn.textContent = themeMode==="system" ? "โหมด: ตามระบบ" : themeMode==="light" ? "โหมด: สว่าง" : "โหมด: มืด";
 });
 
-// formation reference
+/* ---------------- formations + legend ---------------- */
 const FORMATIONS = [
   ["R","ม้าเทียมโคนขุนพล ม้าขวา","รูปมาตรฐานของ GodratSF+ พัฒนาม้าขวาขึ้นเทียบโคน"],
   ["Fast","ม้าขวา (บุกเร็ว)","เหมือน R แต่ตั้งค่าให้พยายามบุกเร็ว"],
@@ -785,15 +945,11 @@ const FORMATIONS = [
   ["NM","ม้าอุปการ + เม็ดซ้าย","ผสมแนว N กับ M"],
   ["NO","ม้าอุปการ + เรือมเหศวร","ผสมแนว N กับ O"],
 ];
-document.getElementById("fgrid").innerHTML = FORMATIONS.map(
-  ([c, th, d]) => `<div class="fitem"><div class="code">${c}</div><div class="th">${th}</div><div class="desc">${d}</div></div>`
-).join("");
-
-// legend — ใช้รูปตัวหมากจริงจากโฟลเดอร์ design/
+$("fgrid").innerHTML = FORMATIONS.map(([c,th,d]) =>
+  `<div class="fitem"><div class="code">${c}</div><div class="th">${th}</div><div class="desc">${d}</div></div>`).join("");
 (() => {
   const items = [["wK","ขุน"],["wM","เม็ด"],["wR","เรือ"],["wN","ม้า"],["wS","โคน"],["wP","เบี้ย"]];
-  const el = document.getElementById("legend");
-  el.innerHTML = items.map(([k, name]) =>
+  $("legend").innerHTML = items.map(([k,name]) =>
     PIECE_IMG[k] ? `<span><img alt="${name}" src="${PIECE_IMG[k]}">${name}</span>` : `<span>${name}</span>`
   ).join("") + `<span style="opacity:.7">· เบี้ยถึงแถวที่ 6 หงายเป็นเม็ด</span>`;
 })();

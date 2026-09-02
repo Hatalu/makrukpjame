@@ -30,7 +30,7 @@
 //    { type:'error', message }
 // ============================================================================
 import { MakrukEngine } from '../src/engine.js';
-import { moveToSan } from '../src/notation.js';
+import { moveToSan, moveToUci } from '../src/notation.js';
 import { START_FEN } from '../src/constants.js';
 
 const engine = new MakrukEngine();
@@ -118,6 +118,31 @@ self.onmessage = (ev) => {
       case 'stop':
         // ไม่มีผลกับรอบที่กำลังคิดอยู่ (ดูหมายเหตุด้านบน)
         break;
+
+      case 'analyze': {
+        const serial = msg.serial || 0;
+        setTimeout(() => {
+          let moves = [], depth = 0;
+          try {
+            const sk = engine.searcher.skill;
+            engine.searcher.skill = 19;
+            const r = engine.think({ movetime: msg.movetime || 1500, useBook: false });
+            engine.searcher.skill = sk;
+            depth = r.depth || 0;
+            const rs = engine.searcher.rootScoresDone || engine.searcher.rootScores || [];
+            const seen = new Set();
+            for (const e of rs) {
+              const u = moveToUci(e.move);
+              if (seen.has(u)) continue; seen.add(u);
+              let san = u; try { san = moveToSan(engine.board, e.move); } catch (x) {}
+              moves.push({ uci: u, san, score: e.score });
+            }
+            moves.sort((a, b) => b.score - a.score);
+          } catch (e) {}
+          self.postMessage({ type: 'analysis', serial, moves, depth });
+        }, 0);
+        break;
+      }
 
       case 'go': {
         if (busy) { self.postMessage({ type: 'error', message: 'engine busy' }); break; }
