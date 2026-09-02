@@ -95,11 +95,15 @@ web/
 
 หน้าเว็บมีปุ่มสลับ "สมองของบอท":
 
-| | เอนจิ้นเบา (JS) | Fairy-Stockfish |
+| | เอนจิ้นเบา (JS) | Fairy-Stockfish + NNUE |
 |---|---|---|
-| แรง | ระดับสโมสร (depth ~8–10) | **เต็มพลัง (depth ~16+)** — คอร์เดียวกับ GodratSF+ |
-| ขนาด | ฝังในไฟล์ (~70 KB) | โหลด `fairy/` (~1.7 MB) ครั้งแรก |
+| แรง | ระดับสโมสร (depth ~8–10) | **เต็มพลัง (depth ~16+, NNUE)** — คอร์เดียวกับ GodratSF+ |
+| ขนาด | ฝังในไฟล์ (~70 KB) | `fairy/` ~1.7 MB + โครงข่าย NNUE ~48 MB (โหลดครั้งเดียว จำในเบราว์เซอร์) |
 | ต้องการ | ไม่มี — ทำงานทุกที่ | **cross-origin isolation** (SharedArrayBuffer) |
+
+> **โครงข่าย NNUE** `web/fairy/makruk.nnue` (`makruk-a8c621e24a8c.nnue`, 47.7 MB) ทำให้ประเมินตำแหน่ง
+> ระดับ GodratSF+ ถ้าไม่มีไฟล์นี้ Fairy-Stockfish จะถอยไปใช้ classical eval (อ่อนกว่ามาก)
+> ดาวน์โหลดใหม่ด้วย `npm run fetch-nnue` (จาก Fairy-Stockfish-NNUE-Catalogue, ianfab)
 
 **Fairy-Stockfish จะใช้ได้ก็ต่อเมื่อหน้าเว็บ cross-origin isolated:**
 - **โฮสต์ที่ตั้ง header เองได้** (Cloudflare Pages `_headers`, Netlify `_headers`, เซิร์ฟเวอร์ตัวเอง):

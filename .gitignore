@@ -3,3 +3,6 @@ node_modules/
 .DS_Store
 data/book.imported.json
 web/artifact.html
+
+# NNUE net: เก็บสำเนา deploy ที่ web/fairy/ พอ (vendor เป็นแค่ที่พักดาวน์โหลด)
+vendor/fairy/makruk.nnue

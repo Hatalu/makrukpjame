@@ -175,6 +175,15 @@ if (existsSync(fairyDir)) {
     const s = join(fairyDir, f);
     if (existsSync(s)) copyFileSync(s, join(ROOT, 'web/fairy', f));
   }
+  // NNUE net (~48 MB): คัดลอกจาก vendor ถ้ามี; ถ้าไม่มีแต่ web/ มีอยู่แล้วก็ปล่อยไว้
+  const netVendor = join(fairyDir, 'makruk.nnue');
+  const netWeb = join(ROOT, 'web/fairy/makruk.nnue');
+  if (existsSync(netVendor)) copyFileSync(netVendor, netWeb);
+  if (!existsSync(netWeb)) {
+    console.warn('  ! ไม่มี makruk.nnue — Fairy-Stockfish จะใช้ classical eval (อ่อนกว่า NNUE มาก)');
+    console.warn('    ดาวน์โหลด: curl -L -o vendor/fairy/makruk.nnue \\');
+    console.warn('      https://github.com/gbtami/Fairy-Stockfish-NNUE-Catalogue/releases/download/networks/makruk-a8c621e24a8c.nnue');
+  }
   console.log('web/fairy/  (Fairy-Stockfish WASM — สมองเต็มพลัง)');
 } else {
   console.warn('  ! ไม่พบ vendor/fairy/ — ปุ่ม Fairy-Stockfish จะโหลดไม่ได้ (ดู README วิธีเพิ่ม)');

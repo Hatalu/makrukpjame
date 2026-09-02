@@ -16,6 +16,7 @@
     "play": "node examples/cli.mjs",
     "build": "node tools/build-standalone.mjs",
     "serve": "node tools/serve.mjs 4180",
+    "fetch-nnue": "curl -L --create-dirs -o vendor/fairy/makruk.nnue https://github.com/gbtami/Fairy-Stockfish-NNUE-Catalogue/releases/download/networks/makruk-a8c621e24a8c.nnue",
     "import-pgn": "node tools/import-pgn.mjs"
   },
   "keywords": ["makruk", "หมากรุกไทย", "thai-chess", "chess-engine", "alpha-beta", "ai", "godratsf"],

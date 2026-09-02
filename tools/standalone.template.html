@@ -367,7 +367,8 @@ const fsf = {
   sf: null, loading: false, curSerial: 0, _readyCb: null,
   send(c) { if (this.sf) this.sf.postMessage(c); },
   ready() { return new Promise((res) => { this._readyCb = res; this.send("isready"); }); },
-  async load() {
+  nnue: false,
+  async load(onProgress) {
     if (this.sf) return true;
     if (!window.crossOriginIsolated) throw new Error("ต้องมี cross-origin isolation");
     await new Promise((res, rej) => {
@@ -380,11 +381,52 @@ const fsf = {
     this.sf.addMessageListener((l) => this.onLine(String(l)));
     this.send("uci");
     this.send("setoption name UCI_Variant value makruk");
-    this.send("setoption name Hash value 128");
+    this.send("setoption name Hash value 192");
     this.send("setoption name Threads value " +
-      Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1)));
+      Math.max(1, Math.min(6, (navigator.hardwareConcurrency || 2) - 1)));
     await this.ready();
+
+    // โหลดโครงข่ายประสาท NNUE ของ makruk (สมองที่ทำให้แข็งเท่า GodratSF+)
+    try {
+      const buf = await this._fetchNet(FSF_DIR + "makruk.nnue", onProgress);
+      this.sf.FS.writeFile("/makruk.nnue", new Uint8Array(buf));
+      this.send("setoption name EvalFile value /makruk.nnue");
+      await this.ready();
+      this.nnue = true;
+    } catch (e) {
+      this.nnue = false;   // ใช้ classical eval ต่อ (ยังเล่นได้แต่แข็งน้อยกว่า)
+      console.warn("NNUE net load failed:", e);
+    }
     return true;
+  },
+  async _fetchNet(url, onProgress) {
+    // ลอง Cache API ก่อน (ดาวน์โหลดครั้งเดียว)
+    let cache = null;
+    try { cache = await caches.open("fsf-nnue-v1"); } catch (e) {}
+    if (cache) {
+      const hit = await cache.match(url);
+      if (hit) return hit.arrayBuffer();
+    }
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const total = +(resp.headers.get("content-length") || 0);
+    if (resp.body && total && onProgress) {
+      const reader = resp.body.getReader();
+      const chunks = []; let got = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value); got += value.length;
+        onProgress(got / total);
+      }
+      const out = new Uint8Array(got); let off = 0;
+      for (const c of chunks) { out.set(c, off); off += c.length; }
+      if (cache) try { await cache.put(url, new Response(out, { headers: { "content-type": "application/octet-stream" } })); } catch (e) {}
+      return out.buffer;
+    }
+    const ab = await resp.arrayBuffer();
+    if (cache) try { await cache.put(url, new Response(ab)); } catch (e) {}
+    return ab;
   },
   onLine(line) {
     if (line === "readyok") { const c = this._readyCb; this._readyCb = null; if (c) c(); return; }
@@ -691,13 +733,18 @@ document.querySelectorAll(".brainsel button").forEach((btn) => {
       return;
     }
     btn.disabled = true;
-    brainNote.textContent = "กำลังโหลด Fairy-Stockfish… (~1.6 MB จาก CDN)";
+    brainNote.textContent = "กำลังโหลด Fairy-Stockfish…";
     try {
-      await fsf.load();
+      await fsf.load((frac) => {
+        brainNote.textContent = "กำลังโหลดโครงข่ายประสาท NNUE (makruk) — " +
+          Math.round(frac * 100) + "% · ~48 MB ครั้งเดียว (จำไว้ในเบราว์เซอร์)";
+      });
       brain = "fsf"; goSerial++; pendingGo = null; thinking = false;
       frameEl.classList.remove("is-thinking");
       setBrainUI("fsf");
-      brainNote.textContent = "Fairy-Stockfish พร้อม · variant makruk · เต็มพลัง (สมองเดียวกับ GodratSF+)";
+      brainNote.textContent = fsf.nnue
+        ? "Fairy-Stockfish + NNUE พร้อม · variant makruk · เต็มพลัง (คอร์เดียวกับ GodratSF+)"
+        : "Fairy-Stockfish พร้อม (classical eval — โหลด NNUE ไม่ได้) · ยังแข็งกว่าเอนจิ้น JS";
       maybeEngineMove();
     } catch (e) {
       brainNote.textContent = "โหลด Fairy-Stockfish ไม่สำเร็จ: " + (e && e.message || e) + " — ใช้เอนจิ้น JS ต่อ";
