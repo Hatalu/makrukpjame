@@ -135,15 +135,17 @@
     filter:drop-shadow(0 2px 3px rgba(0,0,0,.4)); pointer-events:none; user-select:none;
   }
   .sq.sel  { box-shadow:inset 0 0 0 4px var(--accent); }
-  .sq.mv::after { content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:28%; height:28%; border-radius:50%; background:color-mix(in srgb,var(--good) 78%,transparent); }
-  .sq.mv.cap::after { width:86%; height:86%; background:none;
+  /* จุดแนะนำตาเดิน — กึ่งกลางช่องเป๊ะด้วย inset:0 + margin:auto */
+  .sq.mv::after { content:""; position:absolute; inset:0; margin:auto; pointer-events:none;
+    width:30%; height:30%; border-radius:50%; background:color-mix(in srgb,var(--good) 78%,transparent); }
+  .sq.mv.cap::after { width:84%; height:84%; background:none;
     border:5px solid color-mix(in srgb,var(--good) 62%,transparent); }
   .sq.last { box-shadow:inset 0 0 0 4px color-mix(in srgb,var(--brass-bright) 78%,transparent); }
   .sq.chk  { box-shadow:inset 0 0 0 4px var(--accent), inset 0 0 16px color-mix(in srgb,var(--accent) 45%,transparent); }
   .sq.hintfrom { box-shadow:inset 0 0 0 4px color-mix(in srgb,var(--brass-bright) 70%,transparent); }
-  .sq.hintto::after { content:""; position:absolute; inset:16%; border-radius:50%;
-    border:4px solid color-mix(in srgb,var(--brass-bright) 75%,transparent); }
+  /* ใช้ ::before เพื่อไม่ชนกับจุดแนะนำตาเดิน (.sq.mv::after) ที่ต้องอยู่กึ่งกลางช่อง */
+  .sq.hintto::before { content:""; position:absolute; inset:14%; border-radius:50%;
+    border:4px solid color-mix(in srgb,var(--brass-bright) 78%,transparent); pointer-events:none; }
 
   /* ===== cards / controls ===== */
   .card { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:14px 15px; margin-bottom:14px; }
