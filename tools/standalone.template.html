@@ -1069,9 +1069,10 @@ $("modeSel").addEventListener("click", (e) => {
   $("setupControls").hidden = (mode !== "setup");
   document.querySelectorAll("[data-botmode]").forEach(x => x.hidden = (mode !== "bot"));
 
-  if (mode === "setup") { devSaveMode = false; $("komGoalBox").hidden = true; $("setupPlay").textContent = "เริ่มเล่นจากตำแหน่งนี้"; enterSetup(); return; }
+  if (mode === "setup") { devSaveMode = false; devEditId = null; $("komGoalBox").hidden = true; $("setupPlay").textContent = "เริ่มเล่นจากตำแหน่งนี้"; enterSetup(); return; }
   if (prev === "setup") {
     // ออกจากตั้งหมาก -> เริ่มเกมจากตำแหน่งที่ตั้ง (ถ้า valid) มิฉะนั้นคงเดิม
+    devSaveMode = false; devEditId = null; $("komGoalBox").hidden = true;
     if (!$("setupPlay").disabled) newGameFromFen(fenFromEdit());
   }
   if (mode === "bot") { thinking = false; pendingGo = null; maybeEngineMove(); }
@@ -1114,17 +1115,26 @@ $("setupPlay").addEventListener("click", () => {
   const fen = fenFromEdit();
 
   if (devSaveMode) {
-    // บันทึกเป็นหมากกลใหม่ (ต้องเป็นฝ่ายขาวเดิน เพราะผู้เล่นเล่นขาวเสมอ)
+    // หมากกลต้องให้ฝ่ายขาวเดินก่อน เพราะผู้เล่นเล่นขาวเสมอ
     if (editTurn !== "white") { $("setupMsg").textContent = "หมากกลต้องให้ฝ่ายขาวเดินก่อน — สลับฝ่ายเดินเป็นขาว"; $("setupMsg").className = "msg bad"; return; }
     const gt = (document.querySelector('input[name="komGoal"]:checked') || {}).value || "win";
     const goal = gt === "win-in-n" ? { type: "win-in-n", n: Math.max(1, +$("komGoalN").value || 3) }
                 : gt === "draw" ? { type: "draw" } : { type: "win" };
-    const name = prompt("ชื่อหมากกล", "หมากกล " + (customPuzzles().length + 1));
-    if (!name) return;
     const arr = customPuzzles();
-    arr.push({ id: "c" + Date.now().toString(36), name, fen, note: "", goal });
-    saveCustomPuzzles(arr);
-    devSaveMode = false;
+    if (devEditId) {
+      // แก้ไขหมากกลเดิม: เก็บ id เดิมไว้ -> สถิติการผ่านของผู้เล่นยังอยู่
+      const idx = arr.findIndex(x => x.id === devEditId);
+      if (idx < 0) { $("setupMsg").textContent = "ไม่พบหมากกลที่จะแก้ไข"; $("setupMsg").className = "msg bad"; return; }
+      const nn = prompt("ชื่อหมากกล", arr[idx].name);
+      arr[idx] = { ...arr[idx], name: (nn && nn.trim()) || arr[idx].name, fen, goal };
+      saveCustomPuzzles(arr);
+    } else {
+      const name = prompt("ชื่อหมากกล", "หมากกล " + (customPuzzles().length + 1));
+      if (!name) return;
+      arr.push({ id: "c" + Date.now().toString(36), name, fen, note: "", goal });
+      saveCustomPuzzles(arr);
+    }
+    devSaveMode = false; devEditId = null;
     $("komGoalBox").hidden = true;
     $("setupPlay").textContent = "เริ่มเล่นจากตำแหน่งนี้";
     exitSetup();
@@ -1379,27 +1389,58 @@ $("devTabs").addEventListener("click", (e) => {
   $("devAccounts").hidden = b.dataset.tab !== "accounts";
 });
 function renderDev() { renderDevStats(); renderDevPuzzles(); renderDevAccounts(); }
+
+let devStatUid = null;   // ผู้เล่นที่กำลังกางดูรายละเอียดสถิติ
 function renderDevStats() {
   const stats = loadStats();
-  const uids = Object.keys(stats);
-  if (!uids.length) { $("devStats").innerHTML = "<p class='lead'>ยังไม่มีสถิติในเบราว์เซอร์นี้</p>"; return; }
-  const puzz = allPuzzles();
-  let html = "<table class='dev'><tr><th>รหัสผู้เล่น</th><th>หมากกล</th><th>ตาที่เดิน</th><th>สถานะ</th><th>ล่าสุด</th></tr>";
-  for (const uid of uids) {
-    const rec = stats[uid] || {};
-    for (const pid of Object.keys(rec)) {
-      const r = rec[pid];
-      const nm = (puzz.find(p => p.id === pid) || {}).name || pid;
-      const cls = r.passed ? "pass" : "fail";
-      html += `<tr><td>${uid}</td><td>${nm}</td><td>${r.moves}</td>` +
-              `<td class="${cls}">${r.passed ? "ผ่าน ✓" : "ยังไม่ผ่าน"}</td>` +
-              `<td>${new Date(r.ts).toLocaleString("th-TH")}</td></tr>`;
-    }
+  // รายชื่อผู้เล่น = ทุกบัญชีที่รู้จัก + ผู้เล่นที่มีสถิติ (เช่น guest)
+  const ids = [];
+  for (const a of allAccounts()) if (!ids.includes(a.id)) ids.push(a.id);
+  for (const u of Object.keys(stats)) if (!ids.includes(u)) ids.push(u);
+  const roleOf = (id) => { const a = allAccounts().find(x => x.id === id); return a ? (a.role === "dev" ? "Dev" : "ธรรมดา") : "—"; };
+
+  let html = "<p class='lead'>เลือกผู้เล่นเพื่อดูว่าแก้หมากกลไปแล้วกี่ข้อ และผ่านหรือยัง</p><div class='dev-list'>";
+  for (const id of ids) {
+    const rec = stats[id] || {};
+    const done = Object.keys(rec).length;
+    const passed = Object.values(rec).filter(r => r.passed).length;
+    const sel = id === devStatUid ? " style='border-color:var(--accent);color:var(--accent)'" : "";
+    html += `<div class="dev-row"><span><b>${id}</b> · ${roleOf(id)}</span><span class="spacer"></span>` +
+            `<span style="color:var(--ink-soft)">แก้ ${done} · ผ่าน ${passed}</span>` +
+            `<button data-suid="${id}"${sel}>ดูรายละเอียด</button></div>`;
   }
-  html += "</table>";
-  html += "<button class='bigbtn ghost' style='width:auto;padding:8px 16px;margin-top:12px' id='devClearStats' type='button'>ล้างสถิติทั้งหมด (เบราว์เซอร์นี้)</button>";
+  html += "</div><div id='devUserDetail' style='margin-top:14px'></div>";
+  html += "<button class='bigbtn ghost' style='width:auto;padding:8px 16px;margin-top:14px' id='devClearStats' type='button'>ล้างสถิติทั้งหมด (เบราว์เซอร์นี้)</button>";
   $("devStats").innerHTML = html;
-  $("devClearStats").addEventListener("click", () => { if (confirm("ล้างสถิติทั้งหมด?")) { localStorage.removeItem("mk_stats"); renderDevStats(); } });
+  $("devStats").querySelectorAll("button[data-suid]").forEach(b =>
+    b.addEventListener("click", () => { devStatUid = (devStatUid === b.dataset.suid) ? null : b.dataset.suid; renderDevStats(); }));
+  $("devClearStats").addEventListener("click", () => {
+    if (confirm("ล้างสถิติทั้งหมด?")) { localStorage.removeItem("mk_stats"); devStatUid = null; renderDevStats(); }
+  });
+  if (devStatUid) renderDevUserDetail(devStatUid);
+}
+function renderDevUserDetail(uid) {
+  const box = $("devUserDetail"); if (!box) return;
+  const rec = loadStats()[uid] || {};
+  const pids = Object.keys(rec);
+  if (!pids.length) { box.innerHTML = `<p class='lead'>ผู้เล่น <b>${uid}</b> ยังไม่ได้แก้หมากกลในเบราว์เซอร์นี้</p>`; return; }
+  const puzz = allPuzzles();
+  const passed = pids.filter(p => rec[p].passed).length;
+  let html = `<h2 style="font-size:13px;letter-spacing:.1em;margin-bottom:6px">สถิติของ ${uid}</h2>` +
+    `<p class='lead' style='margin-bottom:8px'>แก้ไปแล้ว <b>${pids.length}</b> หมากกล · ` +
+    `<span style="color:var(--pos)">ผ่าน ${passed}</span> · <span style="color:var(--neg)">ยังไม่ผ่าน ${pids.length - passed}</span></p>` +
+    "<table class='dev'><tr><th>หมากกล</th><th>เป้าหมาย</th><th>ตาที่เดิน</th><th>สถานะ</th><th>ล่าสุด</th></tr>";
+  pids.map(pid => ({ pid, r: rec[pid] }))
+      .sort((a, b) => (b.r.ts || 0) - (a.r.ts || 0))
+      .forEach(({ pid, r }) => {
+        const nm = (puzz.find(p => p.id === pid) || {}).name || pid;
+        const cls = r.passed ? "pass" : "fail";
+        html += `<tr><td>${nm}</td><td>${r.goal || "—"}</td><td>${r.moves}</td>` +
+                `<td class="${cls}">${r.passed ? "ผ่าน ✓" : "ยังไม่ผ่าน"}</td>` +
+                `<td>${r.ts ? new Date(r.ts).toLocaleString("th-TH") : "—"}</td></tr>`;
+      });
+  html += "</table>";
+  box.innerHTML = html;
 }
 function renderDevPuzzles() {
   const custom = customPuzzles();
@@ -1408,21 +1449,22 @@ function renderDevPuzzles() {
   html += "<div class='dev-list' style='margin-top:12px'>";
   html += "<div class='dev-row'><span>หมากกลที่ commit ไว้ (web/puzzles.json)</span><span class='spacer'></span><span>" + PUZZLES_FILE.length + " ข้อ</span></div>";
   custom.forEach((p, i) => {
-    html += `<div class="dev-row"><span><b>${p.name}</b><br><span style="color:var(--ink-soft)">${goalText(p.goal)} · ${p.fen.split(" ")[0].slice(0,24)}…</span></span><span class="spacer"></span>` +
-            `<button data-di="${i}" data-act="goal">เป้าหมาย</button><button data-di="${i}" data-act="ren">ชื่อ</button><button data-di="${i}" data-act="del">ลบ</button></div>`;
+    html += `<div class="dev-row" style="flex-wrap:wrap"><span><b>${p.name}</b><br><span style="color:var(--ink-soft)">${goalText(p.goal)} · ${p.fen.split(" ")[0].slice(0,24)}…</span></span><span class="spacer"></span>` +
+            `<button data-di="${i}" data-act="edit">แก้ไข</button><button data-di="${i}" data-act="goal">เป้าหมาย</button><button data-di="${i}" data-act="ren">ชื่อ</button><button data-di="${i}" data-act="del">ลบ</button></div>`;
   });
   html += "</div>";
   html += "<p class='lead' style='margin-top:10px'>หมากกลที่สร้างจะอยู่แค่ในเบราว์เซอร์นี้ · กด \"คัดลอก JSON\" แล้ววางลง <b>web/puzzles.json</b> ใน repo ให้ทุกคนเห็น</p>";
   html += "<button class='bigbtn ghost' style='width:auto;padding:8px 16px;margin-top:6px' id='devCopyJson' type='button'>คัดลอก JSON หมากกลทั้งหมด</button>";
   $("devPuzzles").innerHTML = html;
-  $("devGoSetup").addEventListener("click", () => { devSaveMode = true; activePuzzle = null; exitKom(); showScreen("play"); enterSetupMode(); });
+  $("devGoSetup").addEventListener("click", () => { devSaveMode = true; devEditId = null; activePuzzle = null; exitKom(); showScreen("play"); enterSetupMode(); });
   $("devCopyJson").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(JSON.stringify(allPuzzles(), null, 1)); $("devCopyJson").textContent = "คัดลอกแล้ว ✓"; }
     catch(e) { prompt("คัดลอก JSON นี้ไป commit ที่ web/puzzles.json", JSON.stringify(allPuzzles())); }
   });
   $("devPuzzles").querySelectorAll("button[data-di]").forEach(b => b.addEventListener("click", () => {
     const arr = customPuzzles(); const i = +b.dataset.di;
-    if (b.dataset.act === "del") { arr.splice(i, 1); saveCustomPuzzles(arr); renderDevPuzzles(); }
+    if (b.dataset.act === "edit") { startEditPuzzle(arr[i]); }
+    else if (b.dataset.act === "del") { arr.splice(i, 1); saveCustomPuzzles(arr); renderDevPuzzles(); }
     else if (b.dataset.act === "ren") { const nn = prompt("ชื่อใหม่", arr[i].name); if (nn) { arr[i].name = nn; saveCustomPuzzles(arr); renderDevPuzzles(); } }
     else if (b.dataset.act === "goal") {
       const choice = prompt("เป้าหมาย: พิมพ์  1 = ชนะใน N ตา, 2 = ชนะ, 3 = เสมอ", "1");
@@ -1464,16 +1506,34 @@ function renderDevAccounts() {
   }));
 }
 
-/* Dev: บันทึกกระดานตั้งหมาก -> หมากกลใหม่ */
+/* Dev: บันทึกกระดานตั้งหมาก -> หมากกลใหม่ / แก้ไขหมากกลเดิม */
 let devSaveMode = false;
+let devEditId = null;     // != null = กำลังแก้ไขหมากกลรหัสนี้ (เก็บ id เดิม -> สถิติคงเดิม)
 function enterSetupMode() {
   [...$("modeSel").children].forEach(x => x.classList.toggle("on", x.dataset.mode === "setup"));
   prevPlayMode = "bot"; mode = "setup";
   $("playControls").hidden = true; $("setupControls").hidden = false;
   document.querySelectorAll("[data-botmode]").forEach(x => x.hidden = true);
-  $("setupPlay").textContent = devSaveMode ? "บันทึกเป็นหมากกล" : "เริ่มเล่นจากตำแหน่งนี้";
+  $("setupPlay").textContent = devEditId ? "บันทึกการแก้ไข" : devSaveMode ? "บันทึกเป็นหมากกล" : "เริ่มเล่นจากตำแหน่งนี้";
   $("komGoalBox").hidden = !devSaveMode;
   enterSetup();
+}
+function presetGoal(g) {
+  g = g || { type: "win" };
+  const val = g.type === "win-in-n" ? "win-in-n" : g.type === "draw" ? "draw" : "win";
+  const r = document.querySelector('input[name="komGoal"][value="' + val + '"]');
+  if (r) r.checked = true;
+  if (g.type === "win-in-n") $("komGoalN").value = g.n || 3;
+}
+function startEditPuzzle(p) {
+  if (!p) return;
+  devEditId = p.id; devSaveMode = true;
+  activePuzzle = null; exitKom();
+  showScreen("play");
+  parseFen(p.fen);
+  turn = (p.fen.split(/\s+/)[1] === "b") ? "black" : "white";
+  enterSetupMode();
+  presetGoal(p.goal);
 }
 
 /* ---------------- formations + legend ---------------- */
