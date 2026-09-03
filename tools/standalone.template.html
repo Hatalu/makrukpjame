@@ -118,6 +118,10 @@
     background-size:280% 100%; animation:shimmer 1.5s linear infinite;
   }
   .board-frame.setup { box-shadow:0 10px 30px -8px var(--shadow), inset 0 0 0 2px var(--accent); }
+  .board-frame.setup .board { touch-action:none; }   /* กันสกอลล์ระหว่างลากหมาก */
+  .drag-ghost { position:fixed; z-index:60; pointer-events:none; transform:translate(-50%,-50%);
+    background-position:center; background-repeat:no-repeat; background-size:contain;
+    filter:drop-shadow(0 5px 10px rgba(0,0,0,.55)); }
   @keyframes shimmer { from{ background-position:120% 0; } to{ background-position:-120% 0; } }
 
   .board {
@@ -198,9 +202,9 @@
   .palette { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-top:10px; }
   .palette button {
     aspect-ratio:1; border:1px solid var(--line); border-radius:7px; background:var(--board-wood);
-    cursor:pointer; padding:3px; display:flex; align-items:center; justify-content:center;
+    cursor:grab; padding:3px; display:flex; align-items:center; justify-content:center; touch-action:none;
   }
-  .palette button img { width:100%; height:100%; object-fit:contain; }
+  .palette button img { width:100%; height:100%; object-fit:contain; pointer-events:none; }
   .palette button.on { outline:3px solid var(--accent); outline-offset:-1px; }
   .palette button.erase { background:var(--surface-2); font-size:18px; color:var(--ink-soft); }
   .setup-row { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center; }
@@ -362,6 +366,7 @@
   <div class="kom-strip" id="komStrip" hidden>
     <button class="theme-btn" data-go="kom" type="button">← รายการ</button>
     <span class="knm" id="komName"></span>
+    <span class="kpill" id="komGoalPill">ขาวเดินก่อนเพื่อชนะ</span>
     <span class="kpill" id="komMovePill">เดินไป 0 ตา</span>
     <span class="kpill" id="komStatusPill">กำลังเล่น</span>
     <span class="spacer"></span>
@@ -431,11 +436,28 @@
           <button class="act" id="setupStart" type="button">ตำแหน่งเริ่มเกม</button>
           <button class="act" id="setupClear" type="button">ล้างกระดาน</button>
         </div>
+
+        <!-- Dev: เป้าหมายหมากกล (แสดงเฉพาะตอนบันทึกเป็นหมากกล) -->
+        <div id="komGoalBox" hidden>
+          <p class="hintline" style="margin-top:12px"><b>เป้าหมายหมากกล</b></p>
+          <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px">
+            <input type="radio" name="komGoal" value="win-in-n" checked>
+            ขาวเดินก่อน <input type="number" id="komGoalN" value="3" min="1" max="30"
+              style="width:58px;font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);color:var(--ink)"> ตา เพื่อชนะ
+          </label>
+          <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px">
+            <input type="radio" name="komGoal" value="win"> ขาวเดินก่อนเพื่อชนะ (ไม่จำกัดตา)
+          </label>
+          <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px">
+            <input type="radio" name="komGoal" value="draw"> ขาวเดินก่อนเพื่อเสมอ
+          </label>
+        </div>
+
         <div class="setup-row">
           <button class="act primary" id="setupPlay" type="button">เริ่มเล่นจากตำแหน่งนี้</button>
           <span class="msg" id="setupMsg"></span>
         </div>
-        <p class="hintline">เลือกหมากจากถาด แล้วแตะช่องเพื่อวาง · เลือก 🚫 เพื่อลบ · ห้ามขุนเกิน 1 / เรือ-ม้า-โคน เกิน 2 (เม็ดเกินได้ = เบี้ยหงาย)</p>
+        <p class="hintline"><b>ลากหมากจากถาดมาวางบนกระดาน</b> หรือแตะช่องเพื่อวาง · <b>ลากหมากบนกระดานไปช่องอื่น</b> เพื่อย้าย · ลากออกนอกกระดาน = ลบ · เลือก 🚫 แล้วแตะเพื่อลบ · ห้ามขุนเกิน 1 / เรือ-ม้า-โคน เกิน 2 (เม็ดเกินได้)</p>
       </div>
     </div>
   </section>
@@ -600,7 +622,7 @@ function onEngineMessage(m) {
       renderCount(m.counting); render(); renderMoves(); verdict(m.gameOver); sizeBoard();
       post({ type:"legal" });
       updateTurnText(m.inCheck);
-      if (screen === "kom-play") renderKomStrip();
+      if (screen === "kom-play") { renderKomStrip(); komCheckProgress(); }
       maybeEngineMove();
       refreshSuggestions();
       break;
@@ -677,7 +699,9 @@ function verdict(v) {
 }
 
 /* ---------------- board interaction ---------------- */
+let suppressClick = false;
 function onSquare(idx) {
+  if (suppressClick) { suppressClick = false; return; }
   if (mode === "setup") return setupClick(idx);
   if (thinking || gameOver) return;
   const myTurn = (mode === "2p") || (turn === humanSide);
@@ -740,6 +764,7 @@ function render() {
     if (f === edgeF) { const c=document.createElement("span"); c.className="sq__co r"; c.textContent=r+1; el.appendChild(c); }
     if (src[idx]) el.appendChild(pieceEl(src[idx]));
     el.addEventListener("click", () => onSquare(idx));
+    el.addEventListener("pointerdown", (e) => onSetupPointerDown(e, idx));
     frag.appendChild(el);
   }
   boardEl.replaceChildren(frag);
@@ -888,6 +913,9 @@ function buildPalette() {
       editTool = b.dataset.tool;
       [...el.children].forEach(x => x.classList.toggle("on", x.dataset.tool === editTool));
     });
+    if (b.dataset.tool && b.dataset.tool !== "erase") {
+      b.addEventListener("pointerdown", (e) => onPalettePointerDown(e, b.dataset.tool));
+    }
     el.appendChild(b);
   }
 }
@@ -895,19 +923,98 @@ function pieceCount(bd, c, t, exceptIdx) {
   let n = 0; for (let i=0;i<64;i++){ if (i===exceptIdx) continue; const p=bd[i]; if (p && p.c===c && p.t===t) n++; }
   return n;
 }
-function setupClick(idx) {
-  if (editTool === "erase") { editBoard[idx] = null; render(); validateSetup(); return; }
-  const c = editTool[0], t = editTool[1];
+function setupPlace(idx, c, t, exceptIdx) {
   const r = idx >> 3;
-  if (t === "P" && (r === 0 || r === 7)) { flashMsg("วางเบี้ยแถวแรก/แถวสุดท้ายไม่ได้"); return; }
+  if (t === "P" && (r === 0 || r === 7)) { flashMsg("วางเบี้ยแถวแรก/แถวสุดท้ายไม่ได้"); return false; }
   const max = PIECE_MAX[t] || 8;
-  if (pieceCount(editBoard, c, t, idx) >= max) {
+  if (pieceCount(editBoard, c, t, exceptIdx == null ? idx : exceptIdx) >= max) {
     flashMsg((c==="w"?"ขาว":"ดำ") + " " + thName(t) + " มีได้ไม่เกิน " + max);
-    return;
+    return false;
   }
   editBoard[idx] = { c, t };
+  return true;
+}
+function setupClick(idx) {
+  if (editTool === "erase") { editBoard[idx] = null; render(); validateSetup(); return; }
+  setupPlace(idx, editTool[0], editTool[1], null);
   render(); validateSetup();
 }
+
+/* ---- ลากหมากในโหมดตั้งกระดาน ---- */
+let dragCand = null, dragging = false, dragGhost = null;
+function onSetupPointerDown(e, idx) {
+  if (mode !== "setup" || e.button > 0) return;
+  const p = editBoard[idx];
+  // ลากหมากที่อยู่บนกระดานไปวางที่ช่องอื่น
+  if (!p) return;
+  dragCand = { x: e.clientX, y: e.clientY, srcIdx: idx,
+    piece: { c:p.c, t:p.t }, fromBoard: true };
+}
+function onPalettePointerDown(e, tool) {
+  if (mode !== "setup" || e.button > 0 || !tool || tool === "erase") return;
+  dragCand = { x: e.clientX, y: e.clientY, srcIdx: -1,
+    piece: { c:tool[0], t:tool[1] }, fromBoard: false };
+}
+window.addEventListener("pointermove", (e) => {
+  if (!dragCand) return;
+  if (!dragging) {
+    if (Math.abs(e.clientX - dragCand.x) + Math.abs(e.clientY - dragCand.y) < 7) return;
+    dragging = true;
+    dragGhost = document.createElement("div");
+    dragGhost.className = "drag-ghost";
+    const im = PIECE_IMG[dragCand.piece.c + dragCand.piece.t];
+    if (im) dragGhost.style.backgroundImage = 'url("' + im + '")';
+    const sr = boardEl.getBoundingClientRect();
+    dragGhost.style.width = dragGhost.style.height = Math.round(sr.width / 8 * 0.9) + "px";
+    document.body.appendChild(dragGhost);
+    // ถ้าลากหมากที่อยู่บนกระดาน ให้ช่องต้นทางว่างชั่วคราว
+    if (dragCand.fromBoard) { editBoard[dragCand.srcIdx] = null; render(); }
+  }
+  dragGhost.style.left = e.clientX + "px";
+  dragGhost.style.top = e.clientY + "px";
+});
+window.addEventListener("pointerup", (e) => {
+  if (!dragCand) return;
+  const cand = dragCand; dragCand = null;
+  // ปกติต้องมี pointermove มาก่อนจึงจะถือว่าลาก แต่บางกรณี (เช่นระบบอัตโนมัติ)
+  // ยิงแค่ down->up ให้ถือว่าลากถ้าระยะห่างเกิน threshold
+  if (!dragging) {
+    if (Math.abs(e.clientX - cand.x) + Math.abs(e.clientY - cand.y) < 7) return;
+    if (cand.fromBoard) { editBoard[cand.srcIdx] = null; }
+  }
+  dragging = false;
+  if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+  // กัน click ที่จะตามมาทันทีจากการปล่อยเมาส์ แล้วเคลียร์ทิ้งใน tick ถัดไป
+  suppressClick = true;
+  setTimeout(() => { suppressClick = false; }, 0);
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  const sq = under && under.closest(".sq");
+  let tgt = -1;
+  if (sq) {
+    const all = [...boardEl.children];
+    const pos = all.indexOf(sq);
+    if (pos >= 0) {
+      const order = []; for (let rr=7;rr>=0;rr--) for (let ff=0;ff<8;ff++) order.push(rr*8+ff);
+      const cells = flipped ? order.slice().reverse() : order;
+      tgt = cells[pos];
+    }
+  }
+  if (tgt < 0) {
+    // ปล่อยนอกกระดาน = ลบ (ถ้ามาจากกระดาน) / ยกเลิก
+    render(); validateSetup(); return;
+  }
+  const ok = setupPlace(tgt, cand.piece.c, cand.piece.t, cand.fromBoard ? cand.srcIdx : null);
+  if (!ok && cand.fromBoard) editBoard[cand.srcIdx] = { c: cand.piece.c, t: cand.piece.t };  // วางไม่ได้ -> คืนที่เดิม
+  render(); validateSetup();
+});
+window.addEventListener("pointercancel", () => {
+  if (!dragCand && !dragging) return;
+  const cand = dragCand; dragCand = null;
+  if (dragging && cand && cand.fromBoard) editBoard[cand.srcIdx] = { c: cand.piece.c, t: cand.piece.t };
+  dragging = false;
+  if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+  render(); validateSetup();
+});
 function thName(t){ return ({K:"ขุน",M:"เม็ด",R:"เรือ",N:"ม้า",S:"โคน",P:"เบี้ย"})[t]; }
 function flashMsg(s) { const m=$("setupMsg"); m.textContent = s; m.className = "msg bad"; clearTimeout(flashMsg._t); flashMsg._t = setTimeout(validateSetup, 1600); }
 function fenFromEdit() {
@@ -950,7 +1057,7 @@ $("modeSel").addEventListener("click", (e) => {
   $("setupControls").hidden = (mode !== "setup");
   document.querySelectorAll("[data-botmode]").forEach(x => x.hidden = (mode !== "bot"));
 
-  if (mode === "setup") { devSaveMode = false; $("setupPlay").textContent = "เริ่มเล่นจากตำแหน่งนี้"; enterSetup(); return; }
+  if (mode === "setup") { devSaveMode = false; $("komGoalBox").hidden = true; $("setupPlay").textContent = "เริ่มเล่นจากตำแหน่งนี้"; enterSetup(); return; }
   if (prev === "setup") {
     // ออกจากตั้งหมาก -> เริ่มเกมจากตำแหน่งที่ตั้ง (ถ้า valid) มิฉะนั้นคงเดิม
     if (!$("setupPlay").disabled) newGameFromFen(fenFromEdit());
@@ -997,13 +1104,16 @@ $("setupPlay").addEventListener("click", () => {
   if (devSaveMode) {
     // บันทึกเป็นหมากกลใหม่ (ต้องเป็นฝ่ายขาวเดิน เพราะผู้เล่นเล่นขาวเสมอ)
     if (editTurn !== "white") { $("setupMsg").textContent = "หมากกลต้องให้ฝ่ายขาวเดินก่อน — สลับฝ่ายเดินเป็นขาว"; $("setupMsg").className = "msg bad"; return; }
-    const name = prompt("ชื่อหมากกล", "หมากกล custom-" + (customPuzzles().length + 1));
+    const gt = (document.querySelector('input[name="komGoal"]:checked') || {}).value || "win";
+    const goal = gt === "win-in-n" ? { type: "win-in-n", n: Math.max(1, +$("komGoalN").value || 3) }
+                : gt === "draw" ? { type: "draw" } : { type: "win" };
+    const name = prompt("ชื่อหมากกล", "หมากกล " + (customPuzzles().length + 1));
     if (!name) return;
-    const note = prompt("หมายเหตุ (ไม่ใส่ก็ได้)", "") || "";
     const arr = customPuzzles();
-    arr.push({ id: "c" + Date.now().toString(36), name, fen, note });
+    arr.push({ id: "c" + Date.now().toString(36), name, fen, note: "", goal });
     saveCustomPuzzles(arr);
     devSaveMode = false;
+    $("komGoalBox").hidden = true;
     $("setupPlay").textContent = "เริ่มเล่นจากตำแหน่งนี้";
     exitSetup();
     showScreen("dev");
@@ -1131,24 +1241,42 @@ document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", 
 }));
 
 /* ================= หมากกล (puzzles) ================= */
-const PUZZLES_BUILTIN = /*__PUZZLES__*/;
+// รายการหมากกล = ที่ Dev สร้าง (web/puzzles.json ที่ commit + ที่สร้างในเครื่อง localStorage)
+let PUZZLES_FILE = [];
+fetch("./puzzles.json").then(r => r.ok ? r.json() : []).then(a => {
+  PUZZLES_FILE = Array.isArray(a) ? a : [];
+  if (screen === "kom") renderKomGrid();
+}).catch(() => {});
 function customPuzzles() { try { return JSON.parse(localStorage.getItem("mk_custom_puzzles")||"[]"); } catch(e){ return []; } }
 function saveCustomPuzzles(a) { localStorage.setItem("mk_custom_puzzles", JSON.stringify(a)); }
-function allPuzzles() { return [...PUZZLES_BUILTIN, ...customPuzzles()]; }
+function allPuzzles() { return [...PUZZLES_FILE, ...customPuzzles()]; }
 function loadStats() { try { return JSON.parse(localStorage.getItem("mk_stats")||"{}"); } catch(e){ return {}; } }
+
+// ---- เป้าหมายหมากกล ----
+function goalText(g) {
+  if (!g || g.type === "win") return "ขาวเดินก่อนเพื่อชนะ";
+  if (g.type === "win-in-n") return "ขาวเดินก่อนชนะใน " + g.n + " ตา";
+  if (g.type === "draw") return "ขาวเดินก่อนเพื่อเสมอ";
+  return "ขาวเดินก่อนเพื่อชนะ";
+}
 
 let activePuzzle = null, puzzleStatus = "playing";
 
 function renderKomGrid() {
+  const list = allPuzzles();
+  if (!list.length) {
+    $("komGrid").innerHTML = "<p class='lead'>ยังไม่มีหมากกล — ให้ Dev สร้างจากฟังก์ชัน Dev → ตั้งกระดานหมากกล</p>";
+    return;
+  }
   const stats = (loadStats()[session ? session.id : ""] || {});
   const frag = document.createDocumentFragment();
-  for (const p of allPuzzles()) {
+  for (const p of list) {
     const st = stats[p.id];
     const cls = st ? (st.passed ? "pass" : "fail") : "none";
     const txt = st ? (st.passed ? "ผ่านแล้ว ✓ · " + st.moves + " ตา" : "เคยเล่น " + st.moves + " ตา · ยังไม่ผ่าน") : "ยังไม่เล่น";
     const div = document.createElement("div");
     div.className = "kom-item";
-    div.innerHTML = `<div class="knm">${p.name}</div><div class="kst ${cls}">${txt}</div>`;
+    div.innerHTML = `<div class="knm">${p.name}</div><div class="kst none" style="opacity:.75">${goalText(p.goal)}</div><div class="kst ${cls}">${txt}</div>`;
     div.addEventListener("click", () => openPuzzle(p));
     frag.appendChild(div);
   }
@@ -1168,21 +1296,49 @@ function komMoveCount() { return Math.ceil(uciHistory.length / 2); }   // ตา
 function renderKomStrip() {
   if (!activePuzzle) return;
   $("komName").textContent = activePuzzle.name;
-  $("komMovePill").textContent = "เดินไป " + komMoveCount() + " ตา";
+  const g = activePuzzle.goal;
+  let mv = "เดินไป " + komMoveCount() + " ตา";
+  if (g && g.type === "win-in-n") mv += " / เป้า " + g.n;
+  $("komMovePill").textContent = mv;
+  $("komGoalPill").textContent = goalText(g);
   const sp = $("komStatusPill");
   sp.className = "kpill" + (puzzleStatus === "passed" ? " pass" : puzzleStatus === "failed" ? " fail" : "");
-  sp.textContent = puzzleStatus === "passed" ? "ผ่าน ✓" : puzzleStatus === "failed" ? "ไม่ผ่าน" : "กำลังเล่น";
+  sp.textContent = puzzleStatus === "passed" ? "ผ่าน ✓" : puzzleStatus === "failed" ? "ไม่ผ่าน ✗" : "กำลังเล่น";
+}
+function komCheckProgress() {
+  // เรียกหลังทุกตา — เช็คเป้า "ชนะใน N ตา" ว่าเกินโควตาหรือยัง
+  if (!activePuzzle || screen !== "kom-play" || puzzleStatus !== "playing") return;
+  const g = activePuzzle.goal;
+  if (g && g.type === "win-in-n" && komMoveCount() >= g.n && !gameOver) {
+    // เดินครบ N ตาแล้วยังไม่จบเกม -> ไม่ผ่าน
+    puzzleStatus = "failed";
+    saveKomStat();
+    renderKomStrip();
+  }
+}
+function saveKomStat() {
+  const s = loadStats(); const uid = session ? session.id : "guest";
+  s[uid] = s[uid] || {};
+  const prev = s[uid][activePuzzle.id] || {};
+  s[uid][activePuzzle.id] = { moves: komMoveCount(), status: puzzleStatus, goal: goalText(activePuzzle.goal),
+    passed: !!prev.passed || puzzleStatus === "passed", ts: Date.now() };
+  localStorage.setItem("mk_stats", JSON.stringify(s));
 }
 function komVerdict(v) {
   if (!activePuzzle || screen !== "kom-play") return;
   if (!v || !v.over) return;
-  puzzleStatus = (v.reason === "checkmate" && v.winner === "white") ? "passed" : "failed";
-  const s = loadStats(); const uid = session ? session.id : "guest";
-  s[uid] = s[uid] || {};
-  const prev = s[uid][activePuzzle.id] || {};
-  s[uid][activePuzzle.id] = { moves: komMoveCount(), status: puzzleStatus,
-    passed: !!prev.passed || puzzleStatus === "passed", ts: Date.now() };
-  localStorage.setItem("mk_stats", JSON.stringify(s));
+  const g = activePuzzle.goal || { type: "win" };
+  const whiteMated = (v.reason === "checkmate" && v.winner === "white");   // ขาวรุกจนดำ
+  const blackMated = (v.reason === "checkmate" && v.winner === "black");   // ดำรุกจนขาว
+  const isDraw = v.result === "1/2-1/2";
+  if (g.type === "draw") {
+    puzzleStatus = (isDraw || whiteMated) ? "passed" : "failed";
+  } else if (g.type === "win-in-n") {
+    puzzleStatus = (whiteMated && komMoveCount() <= g.n) ? "passed" : "failed";
+  } else { // win
+    puzzleStatus = whiteMated ? "passed" : "failed";
+  }
+  saveKomStat();
   renderKomStrip();
 }
 $("komRestart").addEventListener("click", () => { if (activePuzzle) openPuzzle(activePuzzle); });
@@ -1237,13 +1393,14 @@ function renderDevPuzzles() {
   let html = "<p class='lead'>สร้างหมากกลใหม่: ไปหน้า \"เล่นปกติ\" → โหมด \"ตั้งหมาก\" จัดกระดาน แล้วกดปุ่ม <b>บันทึกเป็นหมากกล</b></p>";
   html += "<button class='bigbtn ghost' style='width:auto;padding:8px 16px' id='devGoSetup' type='button'>ไปตั้งกระดานหมากกล</button>";
   html += "<div class='dev-list' style='margin-top:12px'>";
-  html += "<div class='dev-row'><span>หมากกลในตัว (แก้ไม่ได้)</span><span class='spacer'></span><span>" + PUZZLES_BUILTIN.length + " ข้อ</span></div>";
+  html += "<div class='dev-row'><span>หมากกลที่ commit ไว้ (web/puzzles.json)</span><span class='spacer'></span><span>" + PUZZLES_FILE.length + " ข้อ</span></div>";
   custom.forEach((p, i) => {
-    html += `<div class="dev-row"><span><b>${p.name}</b> — ${p.fen.split(" ")[0].slice(0,26)}…</span><span class="spacer"></span>` +
-            `<button data-di="${i}" data-act="ren">เปลี่ยนชื่อ</button><button data-di="${i}" data-act="del">ลบ</button></div>`;
+    html += `<div class="dev-row"><span><b>${p.name}</b><br><span style="color:var(--ink-soft)">${goalText(p.goal)} · ${p.fen.split(" ")[0].slice(0,24)}…</span></span><span class="spacer"></span>` +
+            `<button data-di="${i}" data-act="goal">เป้าหมาย</button><button data-di="${i}" data-act="ren">ชื่อ</button><button data-di="${i}" data-act="del">ลบ</button></div>`;
   });
   html += "</div>";
-  html += "<button class='bigbtn ghost' style='width:auto;padding:8px 16px;margin-top:12px' id='devCopyJson' type='button'>คัดลอก JSON หมากกลทั้งหมด</button>";
+  html += "<p class='lead' style='margin-top:10px'>หมากกลที่สร้างจะอยู่แค่ในเบราว์เซอร์นี้ · กด \"คัดลอก JSON\" แล้ววางลง <b>web/puzzles.json</b> ใน repo ให้ทุกคนเห็น</p>";
+  html += "<button class='bigbtn ghost' style='width:auto;padding:8px 16px;margin-top:6px' id='devCopyJson' type='button'>คัดลอก JSON หมากกลทั้งหมด</button>";
   $("devPuzzles").innerHTML = html;
   $("devGoSetup").addEventListener("click", () => { devSaveMode = true; activePuzzle = null; exitKom(); showScreen("play"); enterSetupMode(); });
   $("devCopyJson").addEventListener("click", async () => {
@@ -1253,7 +1410,15 @@ function renderDevPuzzles() {
   $("devPuzzles").querySelectorAll("button[data-di]").forEach(b => b.addEventListener("click", () => {
     const arr = customPuzzles(); const i = +b.dataset.di;
     if (b.dataset.act === "del") { arr.splice(i, 1); saveCustomPuzzles(arr); renderDevPuzzles(); }
-    else { const nn = prompt("ชื่อใหม่", arr[i].name); if (nn) { arr[i].name = nn; saveCustomPuzzles(arr); renderDevPuzzles(); } }
+    else if (b.dataset.act === "ren") { const nn = prompt("ชื่อใหม่", arr[i].name); if (nn) { arr[i].name = nn; saveCustomPuzzles(arr); renderDevPuzzles(); } }
+    else if (b.dataset.act === "goal") {
+      const choice = prompt("เป้าหมาย: พิมพ์  1 = ชนะใน N ตา, 2 = ชนะ, 3 = เสมอ", "1");
+      if (choice === "1") { const n = +prompt("ชนะภายในกี่ตา", (arr[i].goal && arr[i].goal.n) || 3); arr[i].goal = { type:"win-in-n", n: Math.max(1, n||3) }; }
+      else if (choice === "2") arr[i].goal = { type:"win" };
+      else if (choice === "3") arr[i].goal = { type:"draw" };
+      else return;
+      saveCustomPuzzles(arr); renderDevPuzzles();
+    }
   }));
 }
 function renderDevAccounts() {
@@ -1294,6 +1459,7 @@ function enterSetupMode() {
   $("playControls").hidden = true; $("setupControls").hidden = false;
   document.querySelectorAll("[data-botmode]").forEach(x => x.hidden = true);
   $("setupPlay").textContent = devSaveMode ? "บันทึกเป็นหมากกล" : "เริ่มเล่นจากตำแหน่งนี้";
+  $("komGoalBox").hidden = !devSaveMode;
   enterSetup();
 }
 
