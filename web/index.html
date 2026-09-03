@@ -17,6 +17,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Trirong:ital,wght@0,500;0,600;1,500&family=Sarabun:wght@400;500;600;700&display=swap">
+<!-- ฐานข้อมูลกลาง (Supabase) — ใช้ได้บนเว็บ (GitHub Pages); ถ้าไม่ตั้งค่าจะกลับไปใช้ localStorage -->
+<script src="./supabase-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <style>
   :root {
     --ground:#e7dbc3; --surface:#f1e8d5; --surface-2:#ece0c8;
@@ -1127,12 +1130,13 @@ $("setupPlay").addEventListener("click", () => {
       if (idx < 0) { $("setupMsg").textContent = "ไม่พบหมากกลที่จะแก้ไข"; $("setupMsg").className = "msg bad"; return; }
       const nn = prompt("ชื่อหมากกล", arr[idx].name);
       arr[idx] = { ...arr[idx], name: (nn && nn.trim()) || arr[idx].name, fen, goal };
-      saveCustomPuzzles(arr);
+      saveCustomPuzzles(arr); cloud.savePuzzle(arr[idx]);
     } else {
       const name = prompt("ชื่อหมากกล", "หมากกล " + (customPuzzles().length + 1));
       if (!name) return;
-      arr.push({ id: "c" + Date.now().toString(36), name, fen, note: "", goal });
-      saveCustomPuzzles(arr);
+      const np = { id: "c" + Date.now().toString(36), name, fen, note: "", goal };
+      arr.push(np);
+      saveCustomPuzzles(arr); cloud.savePuzzle(np);
     }
     devSaveMode = false; devEditId = null;
     $("komGoalBox").hidden = true;
@@ -1202,6 +1206,75 @@ themeBtn.addEventListener("click", () => {
   themeBtn.textContent = themeMode==="system" ? "โหมด: ตามระบบ" : themeMode==="light" ? "โหมด: สว่าง" : "โหมด: มืด";
 });
 
+/* ================= ฐานข้อมูลกลาง (Supabase) =================
+   ถ้าตั้งค่าใน web/supabase-config.js -> บัญชี / หมากกล / สถิติ ใช้ร่วมกันทุกเครื่อง
+   ถ้าไม่ได้ตั้งค่า -> ทำงานแบบเดิม (localStorage เครื่องใครเครื่องมัน)             */
+const cloud = {
+  sb: null, on: false, _last: 0, _p: null,
+  async init() {
+    const url = window.SUPABASE_URL, key = window.SUPABASE_ANON_KEY;
+    if (!url || !key || !(window.supabase && window.supabase.createClient)) return;
+    try {
+      this.sb = window.supabase.createClient(url, key, { auth: { persistSession: false } });
+      this.on = true;
+      await this.pull(true);
+      setInterval(() => { if (["home","kom","dev","kom-play"].includes(screen)) this.pull(); }, 30000);
+    } catch (e) { console.warn("[cloud] init:", e); this.on = false; }
+  },
+  async pull(force) {
+    if (!this.on) return;
+    if (!force && Date.now() - this._last < 4000) return this._p;
+    this._last = Date.now();
+    this._p = (async () => {
+      try {
+        const [acc, puz, sta] = await Promise.all([
+          this.sb.from("mk_accounts").select("*"),
+          this.sb.from("mk_puzzles").select("*"),
+          this.sb.from("mk_stats").select("*"),
+        ]);
+        if (!acc.error && acc.data)
+          localStorage.setItem("mk_accounts", JSON.stringify(acc.data.map(a => ({ id:String(a.id), pw:a.pw, role:a.role || "user" }))));
+        if (!puz.error && puz.data)
+          localStorage.setItem("mk_custom_puzzles", JSON.stringify(
+            puz.data.map(p => ({ id:p.id, name:p.name, fen:p.fen, note:p.note || "", goal:p.goal || { type:"win" } }))));
+        if (!sta.error && sta.data) {
+          const s = {};
+          for (const r of sta.data)
+            (s[String(r.uid)] = s[String(r.uid)] || {})[r.puzzle_id] =
+              { moves:r.moves|0, status:r.status || "", goal:r.goal || "", passed:!!r.passed,
+                ts: r.ts ? new Date(r.ts).getTime() : Date.now() };
+          localStorage.setItem("mk_stats", JSON.stringify(s));
+        }
+        if (screen === "kom") renderKomGrid();
+        else if (screen === "dev") renderDev();
+        else if (screen === "kom-play" && activePuzzle) renderKomStrip();
+      } catch (e) { console.warn("[cloud] pull:", e); }
+    })();
+    return this._p;
+  },
+  async pullAccounts() {
+    if (!this.on) return;
+    try {
+      const { data, error } = await this.sb.from("mk_accounts").select("*");
+      if (!error && data) localStorage.setItem("mk_accounts", JSON.stringify(data.map(a => ({ id:String(a.id), pw:a.pw, role:a.role || "user" }))));
+    } catch (e) { console.warn("[cloud] pullAccounts:", e); }
+  },
+  _w(promise, tag) { if (promise && promise.then) promise.then(r => { if (r && r.error) console.warn("[cloud] " + tag + ":", r.error.message); }); },
+  savePuzzle(p) {
+    if (!this.on) return;
+    this._w(this.sb.from("mk_puzzles").upsert({ id:p.id, name:p.name, fen:p.fen, note:p.note || "", goal:p.goal || { type:"win" }, updated_at:new Date().toISOString() }), "savePuzzle");
+  },
+  delPuzzle(id) { if (this.on) this._w(this.sb.from("mk_puzzles").delete().eq("id", id), "delPuzzle"); },
+  saveStat(uid, pid, rec) {
+    if (!this.on) return;
+    this._w(this.sb.from("mk_stats").upsert({ uid:String(uid), puzzle_id:pid, moves:rec.moves|0, status:rec.status || "",
+      goal:rec.goal || "", passed:!!rec.passed, ts:new Date(rec.ts || Date.now()).toISOString() }), "saveStat");
+  },
+  saveAccount(a) { if (this.on) this._w(this.sb.from("mk_accounts").upsert({ id:String(a.id), pw:a.pw, role:a.role }), "saveAccount"); },
+  delAccount(id) { if (this.on) this._w(this.sb.from("mk_accounts").delete().eq("id", String(id)), "delAccount"); },
+  async clearStats() { if (this.on) { try { await this.sb.from("mk_stats").delete().not("uid", "is", null); } catch (e) { console.warn("[cloud] clearStats:", e); } } },
+};
+
 /* ================= LOGIN / ROLES / SCREENS ================= */
 const BUILTIN_ACCOUNTS = [{ id:"66121360201", pw:"211406", role:"dev" }];
 function extraAccounts() { try { return JSON.parse(localStorage.getItem("mk_accounts")||"[]"); } catch(e){ return []; } }
@@ -1223,6 +1296,7 @@ function showScreen(s) {
   $("modeSel").style.display = (s === "kom-play") ? "none" : "";
   if (s === "kom") renderKomGrid();
   if (s === "dev") renderDev();
+  if (["home","kom","dev","kom-play"].includes(s)) cloud.pull();   // ดึงข้อมูลล่าสุดจากฐานข้อมูลกลาง
   if (s === "play" || s === "kom-play") { sizeBoard(); refreshSuggestions(); }
   if (s === "home") {
     $("homeHi").textContent = "รหัส " + session.id + " · สิทธิ " + (session.role === "dev" ? "Dev" : "ธรรมดา");
@@ -1239,9 +1313,14 @@ function applySession() {
   else showScreen("login");
 })();
 
-$("loginBtn").addEventListener("click", () => {
+$("loginBtn").addEventListener("click", async () => {
   const id = $("loginId").value.trim(), pw = $("loginPw").value;
-  const a = allAccounts().find(x => x.id === id && x.pw === pw);
+  let a = allAccounts().find(x => x.id === id && x.pw === pw);
+  if (!a && cloud.on) {   // เครื่องใหม่ที่ยังไม่มีบัญชีใน cache -> ลองดึงจากฐานข้อมูลกลางก่อน
+    $("loginMsg").textContent = "กำลังตรวจสอบ…";
+    await cloud.pullAccounts();
+    a = allAccounts().find(x => x.id === id && x.pw === pw);
+  }
   if (!a) { $("loginMsg").textContent = "รหัสประจำตัวหรือรหัสผ่านไม่ถูกต้อง"; return; }
   session = { id: a.id, role: a.role };
   sessionStorage.setItem("mk_session", JSON.stringify(session));
@@ -1272,7 +1351,12 @@ fetch("./puzzles.json").then(r => r.ok ? r.json() : []).then(a => {
 }).catch(() => {});
 function customPuzzles() { try { return JSON.parse(localStorage.getItem("mk_custom_puzzles")||"[]"); } catch(e){ return []; } }
 function saveCustomPuzzles(a) { localStorage.setItem("mk_custom_puzzles", JSON.stringify(a)); }
-function allPuzzles() { return [...PUZZLES_FILE, ...customPuzzles()]; }
+function allPuzzles() {
+  const seen = new Set(), out = [];
+  for (const p of [...customPuzzles(), ...PUZZLES_FILE])
+    if (p && p.id && !seen.has(p.id)) { seen.add(p.id); out.push(p); }
+  return out;
+}
 function loadStats() { try { return JSON.parse(localStorage.getItem("mk_stats")||"{}"); } catch(e){ return {}; } }
 
 // ---- เป้าหมายหมากกล ----
@@ -1343,9 +1427,11 @@ function saveKomStat() {
   const s = loadStats(); const uid = session ? session.id : "guest";
   s[uid] = s[uid] || {};
   const prev = s[uid][activePuzzle.id] || {};
-  s[uid][activePuzzle.id] = { moves: komMoveCount(), status: puzzleStatus, goal: goalText(activePuzzle.goal),
+  const rec = { moves: komMoveCount(), status: puzzleStatus, goal: goalText(activePuzzle.goal),
     passed: !!prev.passed || puzzleStatus === "passed", ts: Date.now() };
+  s[uid][activePuzzle.id] = rec;
   localStorage.setItem("mk_stats", JSON.stringify(s));
+  cloud.saveStat(uid, activePuzzle.id, rec);
 }
 function komVerdict(v) {
   if (!activePuzzle || screen !== "kom-play") return;
@@ -1410,12 +1496,19 @@ function renderDevStats() {
             `<button data-suid="${id}"${sel}>ดูรายละเอียด</button></div>`;
   }
   html += "</div><div id='devUserDetail' style='margin-top:14px'></div>";
-  html += "<button class='bigbtn ghost' style='width:auto;padding:8px 16px;margin-top:14px' id='devClearStats' type='button'>ล้างสถิติทั้งหมด (เบราว์เซอร์นี้)</button>";
+  const cstat = cloud.on
+    ? "<span style='color:var(--pos)'>☁ เชื่อมฐานข้อมูลกลาง Supabase แล้ว — ข้อมูลใช้ร่วมกันทุกเครื่อง</span>"
+    : "<span style='color:var(--neg)'>⚠ ยังไม่ได้เชื่อมฐานข้อมูลกลาง — ข้อมูลแยกตามเครื่อง (ตั้งค่าใน web/supabase-config.js)</span>";
+  html = "<p class='lead' style='margin-bottom:10px'>" + cstat + "</p>" + html;
+  html += "<button class='bigbtn ghost' style='width:auto;padding:8px 16px;margin-top:14px' id='devClearStats' type='button'>ล้างสถิติทั้งหมด" + (cloud.on ? " (ทุกเครื่อง)" : " (เบราว์เซอร์นี้)") + "</button>";
   $("devStats").innerHTML = html;
   $("devStats").querySelectorAll("button[data-suid]").forEach(b =>
     b.addEventListener("click", () => { devStatUid = (devStatUid === b.dataset.suid) ? null : b.dataset.suid; renderDevStats(); }));
-  $("devClearStats").addEventListener("click", () => {
-    if (confirm("ล้างสถิติทั้งหมด?")) { localStorage.removeItem("mk_stats"); devStatUid = null; renderDevStats(); }
+  $("devClearStats").addEventListener("click", async () => {
+    if (!confirm(cloud.on ? "ล้างสถิติของผู้เล่นทุกคนในฐานข้อมูลกลาง?" : "ล้างสถิติทั้งหมด?")) return;
+    localStorage.removeItem("mk_stats"); devStatUid = null;
+    await cloud.clearStats();
+    renderDevStats();
   });
   if (devStatUid) renderDevUserDetail(devStatUid);
 }
@@ -1453,7 +1546,9 @@ function renderDevPuzzles() {
             `<button data-di="${i}" data-act="edit">แก้ไข</button><button data-di="${i}" data-act="goal">เป้าหมาย</button><button data-di="${i}" data-act="ren">ชื่อ</button><button data-di="${i}" data-act="del">ลบ</button></div>`;
   });
   html += "</div>";
-  html += "<p class='lead' style='margin-top:10px'>หมากกลที่สร้างจะอยู่แค่ในเบราว์เซอร์นี้ · กด \"คัดลอก JSON\" แล้ววางลง <b>web/puzzles.json</b> ใน repo ให้ทุกคนเห็น</p>";
+  html += cloud.on
+    ? "<p class='lead' style='margin-top:10px'>☁ หมากกลที่สร้าง/แก้ไข จะ sync ขึ้นฐานข้อมูลกลางให้ทุกเครื่องเห็นทันที</p>"
+    : "<p class='lead' style='margin-top:10px'>หมากกลที่สร้างจะอยู่แค่ในเบราว์เซอร์นี้ · กด \"คัดลอก JSON\" แล้ววางลง <b>web/puzzles.json</b> ใน repo ให้ทุกคนเห็น</p>";
   html += "<button class='bigbtn ghost' style='width:auto;padding:8px 16px;margin-top:6px' id='devCopyJson' type='button'>คัดลอก JSON หมากกลทั้งหมด</button>";
   $("devPuzzles").innerHTML = html;
   $("devGoSetup").addEventListener("click", () => { devSaveMode = true; devEditId = null; activePuzzle = null; exitKom(); showScreen("play"); enterSetupMode(); });
@@ -1464,15 +1559,15 @@ function renderDevPuzzles() {
   $("devPuzzles").querySelectorAll("button[data-di]").forEach(b => b.addEventListener("click", () => {
     const arr = customPuzzles(); const i = +b.dataset.di;
     if (b.dataset.act === "edit") { startEditPuzzle(arr[i]); }
-    else if (b.dataset.act === "del") { arr.splice(i, 1); saveCustomPuzzles(arr); renderDevPuzzles(); }
-    else if (b.dataset.act === "ren") { const nn = prompt("ชื่อใหม่", arr[i].name); if (nn) { arr[i].name = nn; saveCustomPuzzles(arr); renderDevPuzzles(); } }
+    else if (b.dataset.act === "del") { const rid = arr[i] && arr[i].id; arr.splice(i, 1); saveCustomPuzzles(arr); if (rid) cloud.delPuzzle(rid); renderDevPuzzles(); }
+    else if (b.dataset.act === "ren") { const nn = prompt("ชื่อใหม่", arr[i].name); if (nn) { arr[i].name = nn; saveCustomPuzzles(arr); cloud.savePuzzle(arr[i]); renderDevPuzzles(); } }
     else if (b.dataset.act === "goal") {
       const choice = prompt("เป้าหมาย: พิมพ์  1 = ชนะใน N ตา, 2 = ชนะ, 3 = เสมอ", "1");
       if (choice === "1") { const n = +prompt("ชนะภายในกี่ตา", (arr[i].goal && arr[i].goal.n) || 3); arr[i].goal = { type:"win-in-n", n: Math.max(1, n||3) }; }
       else if (choice === "2") arr[i].goal = { type:"win" };
       else if (choice === "3") arr[i].goal = { type:"draw" };
       else return;
-      saveCustomPuzzles(arr); renderDevPuzzles();
+      saveCustomPuzzles(arr); cloud.savePuzzle(arr[i]); renderDevPuzzles();
     }
   }));
 }
@@ -1497,11 +1592,13 @@ function renderDevAccounts() {
     if (allAccounts().some(a => a.id === id)) { alert("รหัสประจำตัวนี้มีแล้ว"); return; }
     const arr = extraAccounts(); arr.push({ id, pw, role });
     localStorage.setItem("mk_accounts", JSON.stringify(arr));
+    cloud.saveAccount({ id, pw, role });
     renderDevAccounts();
   });
   $("devAccounts").querySelectorAll("button[data-ai]").forEach(b => b.addEventListener("click", () => {
-    const arr = extraAccounts(); arr.splice(+b.dataset.ai, 1);
+    const arr = extraAccounts(); const rid = arr[+b.dataset.ai] && arr[+b.dataset.ai].id; arr.splice(+b.dataset.ai, 1);
     localStorage.setItem("mk_accounts", JSON.stringify(arr));
+    if (rid) cloud.delAccount(rid);
     renderDevAccounts();
   }));
 }
@@ -1565,6 +1662,9 @@ $("fgrid").innerHTML = FORMATIONS.map(([c,th,d]) =>
     PIECE_IMG[k] ? `<span><img alt="${name}" src="${PIECE_IMG[k]}">${name}</span>` : `<span>${name}</span>`
   ).join("") + `<span style="opacity:.7">· เบี้ยถึงแถวที่ 6 หงายเป็นเม็ด</span>`;
 })();
+
+/* เชื่อมฐานข้อมูลกลาง (ถ้าตั้งค่าไว้) */
+cloud.init();
 </script>
 </body>
 </html>

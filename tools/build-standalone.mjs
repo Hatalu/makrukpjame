@@ -179,6 +179,11 @@ mkdirSync(join(ROOT, 'web'), { recursive: true });
 writeFileSync(join(ROOT, 'web/index.html'), html);
 // หมากกล : โหลดจาก web/puzzles.json ตอนรัน (Dev เพิ่ม/commit เอง) — สร้างไฟล์ว่างถ้ายังไม่มี
 if (!existsSync(join(ROOT, 'web/puzzles.json'))) writeFileSync(join(ROOT, 'web/puzzles.json'), '[]\n');
+// Supabase config : สร้าง placeholder ถ้ายังไม่มี (ผู้ใช้เติมค่า URL + anon key แล้ว commit)
+if (!existsSync(join(ROOT, 'web/supabase-config.js')))
+  writeFileSync(join(ROOT, 'web/supabase-config.js'),
+    '/* Supabase: ใส่ค่าจาก Project Settings -> API (anon key เท่านั้น). ว่าง = ใช้ localStorage */\n' +
+    'window.SUPABASE_URL = "";\nwindow.SUPABASE_ANON_KEY = "";\n');
 console.log(`web/index.html   (${(html.length / 1024).toFixed(0)} KB, engine bundle ${(engineWorkerSource.length / 1024).toFixed(0)} KB)`);
 
 // coi-serviceworker + Fairy-Stockfish : สำหรับสมอง "เต็มพลัง" บนโฮสต์สแตติก
@@ -217,9 +222,12 @@ if (existsSync(fairyDir)) {
 }
 
 // artifact.html : เอาโครง <!DOCTYPE>/<html>/<head>/<body> ออก (Claude Artifact ครอบให้เอง)
+// + ถอด Supabase ออก (Artifact ต่อ network ข้ามโดเมนไม่ได้ -> ใช้ localStorage เหมือนเดิม)
 const artifact = html
   .replace(/^<!DOCTYPE html>\s*<html[^>]*>\s*<head>\s*/i, '')
   .replace(/\s*<\/head>\s*<body>\s*/i, '\n')
-  .replace(/\s*<\/body>\s*<\/html>\s*$/i, '\n');
+  .replace(/\s*<\/body>\s*<\/html>\s*$/i, '\n')
+  .replace('<script src="./supabase-config.js"></script>', '')
+  .replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js[^"]*"><\/script>/, '');
 writeFileSync(join(ROOT, 'web/artifact.html'), artifact);
 console.log(`web/artifact.html (${(artifact.length / 1024).toFixed(0)} KB)  — สำหรับ publish เป็น Claude Artifact`);
