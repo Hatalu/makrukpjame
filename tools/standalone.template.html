@@ -95,6 +95,18 @@
   .col-moves { grid-area:moves; }
   @media (min-width:981px) { .col-suggest { position:sticky; top:16px; } }
 
+  /* โหมดหมากกล = แก้โจทย์ ไม่มีตัวช่วย: ซ่อนแนะนำตาเดิน / แถบแต้ม / ปุ่มช่วยต่าง ๆ */
+  .wrap.kom #suggCard,
+  .wrap.kom .evalbar,
+  .wrap.kom #engineStat,
+  .wrap.kom #new,
+  .wrap.kom #hint,
+  .wrap.kom #side,
+  .wrap.kom #gonow,
+  .wrap.kom #brainSel,
+  .wrap.kom #brainNote,
+  .wrap.kom .col-controls > .card > h2 { display:none !important; }
+
   /* ===== board ===== */
   .board-stage { display:flex; gap:12px; align-items:flex-start; }
   .evalbar {
@@ -270,8 +282,8 @@
   .kom-item .kst { font-size:11.5px; margin-top:4px; }
   .kom-item .kst.pass { color:var(--pos); } .kom-item .kst.fail { color:var(--neg); } .kom-item .kst.none { color:var(--ink-soft); }
 
-  .kom-strip { grid-column:1 / -1; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-    background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-bottom:4px; }
+  .kom-strip { display:flex; align-items:center; gap:10px 12px; flex-wrap:wrap;
+    background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-bottom:12px; }
   .kom-strip .knm { font-family:"Trirong",serif; font-weight:600; font-size:16px; }
   .kom-strip .kpill { font-size:12px; font-weight:600; padding:3px 10px; border-radius:999px; background:var(--surface-2); border:1px solid var(--line); }
   .kom-strip .kpill.pass { color:var(--pos); border-color:color-mix(in srgb,var(--pos) 50%,var(--line)); }
@@ -363,17 +375,17 @@
 </div>
 
 <main class="wrap" hidden>
-  <div class="kom-strip" id="komStrip" hidden>
-    <button class="theme-btn" data-go="kom" type="button">← รายการ</button>
-    <span class="knm" id="komName"></span>
-    <span class="kpill" id="komGoalPill">ขาวเดินก่อนเพื่อชนะ</span>
-    <span class="kpill" id="komMovePill">เดินไป 0 ตา</span>
-    <span class="kpill" id="komStatusPill">กำลังเล่น</span>
-    <span class="spacer"></span>
-    <button class="theme-btn" id="komRestart" type="button">เริ่มข้อนี้ใหม่</button>
-  </div>
   <!-- ===== board ===== -->
   <section class="col-board">
+    <div class="kom-strip" id="komStrip" hidden>
+      <button class="theme-btn" data-go="kom" type="button">← รายการ</button>
+      <span class="knm" id="komName"></span>
+      <span class="kpill" id="komGoalPill">ขาวเดินก่อนเพื่อชนะ</span>
+      <span class="kpill" id="komMovePill">เดินไป 0 ตา</span>
+      <span class="kpill" id="komStatusPill">กำลังเล่น</span>
+      <span class="spacer"></span>
+      <button class="theme-btn" id="komRestart" type="button">เริ่มข้อนี้ใหม่</button>
+    </div>
     <div class="board-stage">
       <div class="evalbar" title="แต้มประเมิน (ขาวได้เปรียบ = แถบทองสูงขึ้น)">
         <div class="evalbar__white" id="evalWhite"></div><div class="evalbar__mid"></div>
@@ -387,7 +399,7 @@
 
   <!-- ===== แนะนำตาเดิน (ด้านข้าง) ===== -->
   <aside class="col-suggest">
-    <div class="card">
+    <div class="card" id="suggCard">
       <h2>แนะนำตาเดิน <span class="sub" id="suggTurn"></span></h2>
       <div class="sugg-list" id="suggList"><div class="sugg-meta">— รอตำแหน่ง —</div></div>
       <div class="sugg-meta" id="suggMeta"></div>
@@ -421,7 +433,7 @@
           <button class="act" id="side" type="button" data-botmode>คุณเล่น: ขาว</button>
           <button class="act" id="gonow" type="button" data-botmode>ให้บอทเดิน</button>
         </div>
-        <div class="segbtns" style="margin-top:12px">
+        <div class="segbtns" id="brainSel" style="margin-top:12px">
           <button type="button" data-brain="js" class="on">เอนจิ้นเบา (JS)</button>
           <button type="button" data-brain="fsf">Fairy-Stockfish</button>
         </div>
@@ -814,7 +826,7 @@ const analysis = {
   cancel() { this.serial++; this.running = false; if (fsf.sf && fsf.mode === "analyze") { fsf.stop(); fsf.mode = null; } },
   clearUI(msg) { suggList.innerHTML = `<div class="sugg-meta">${msg||""}</div>`; suggMeta.textContent = ""; },
   shouldRun() {
-    if (screen !== "play" && screen !== "kom-play") return false;
+    if (screen !== "play") return false;   // โหมดหมากกลไม่มีตัวช่วยแนะนำตาเดิน
     if (mode === "setup" || gameOver || thinking || pendingGo) return false;
     if (mode === "bot" && turn !== humanSide) return false;   // ตาบอท — ไม่ต้องแนะนำ
     return true;
@@ -1082,7 +1094,7 @@ $("undo").addEventListener("click", () => {
   post({ type:"undo", count:back }); post({ type:"eval" });
 });
 $("flip").addEventListener("click", () => { flipped = !flipped; render(); });
-$("hint").addEventListener("click", () => { if (ready && !thinking && mode !== "setup") startGo("hint"); });
+$("hint").addEventListener("click", () => { if (ready && !thinking && mode !== "setup" && screen !== "kom-play") startGo("hint"); });
 $("gonow").addEventListener("click", () => { if (ready && !thinking && !gameOver && mode === "bot") startGo("force"); });
 $("side").addEventListener("click", () => {
   humanSide = humanSide === "white" ? "black" : "white";
@@ -1194,6 +1206,7 @@ function showScreen(s) {
   $("komScreen").hidden   = (s !== "kom");
   $("devScreen").hidden   = (s !== "dev");
   document.querySelector(".wrap").hidden = !(s === "play" || s === "kom-play");
+  document.querySelector(".wrap").classList.toggle("kom", s === "kom-play");
   $("komStrip").hidden = (s !== "kom-play");
   $("userChip").hidden = !session;
   $("homeBtn").hidden = !session || s === "login";
