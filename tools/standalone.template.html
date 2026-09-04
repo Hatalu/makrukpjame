@@ -548,39 +548,54 @@ const boardEl=$("board"), frameEl=$("frame"), turnChip=$("turnChip"), turnText=$
       suggList=$("suggList"), suggMeta=$("suggMeta"), suggTurn=$("suggTurn");
 
 /* ---------------- Fairy-Stockfish + NNUE ---------------- */
+const withTimeout = (p, ms, label) => Promise.race([
+  Promise.resolve(p),
+  new Promise((_, rej) => setTimeout(() => rej(new Error("หมดเวลา: " + label)), ms)),
+]);
+const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent || "")
+  || (navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1);
+
 const fsf = {
   sf:null, nnue:false, _readyCb:null, curSerial:0, mode:null, multipv:1,
   send(c){ if(this.sf) this.sf.postMessage(c); },
   ready(){ return new Promise((res)=>{ this._readyCb=res; this.send("isready"); }); },
+  _kill() {
+    try { this.sf && this.sf.terminate && this.sf.terminate(); } catch (e) {}
+    this.sf = null; this.nnue = false; this._readyCb = null;
+  },
   async load(onProgress) {
     if (this.sf) return true;
     if (!window.crossOriginIsolated) throw new Error("ต้องมี cross-origin isolation");
-    await new Promise((res,rej)=>{ const s=document.createElement("script");
-      s.src=FSF_DIR+"stockfish.js"; s.onload=res; s.onerror=()=>rej(new Error("โหลดสคริปต์ไม่ได้"));
-      document.head.appendChild(s); });
-    this.sf = await window.Stockfish({ locateFile:(p)=>FSF_DIR+p });
-    this.sf.addMessageListener((l)=>this.onLine(String(l)));
+    try {
+      await withTimeout(new Promise((res,rej)=>{ const s=document.createElement("script");
+        s.src=FSF_DIR+"stockfish.js"; s.onload=res; s.onerror=()=>rej(new Error("โหลดสคริปต์ไม่ได้"));
+        document.head.appendChild(s); }), 20000, "โหลดสคริปต์ engine");
+      this.sf = await withTimeout(window.Stockfish({ locateFile:(p)=>FSF_DIR+p }), 25000, "เริ่ม engine");
+      this.sf.addMessageListener((l)=>this.onLine(String(l)));
+    } catch (e) { this._kill(); throw e; }
     const cores = navigator.hardwareConcurrency || 2;
-    // มือถือ: hash เล็ก + เธรดน้อย เพื่อเหลือแรมให้ NNUE net (~48 MB) เขียนลง MEMFS ได้
+    // มือถือ: hash เล็ก + เธรดน้อย เพื่อเหลือแรมให้ NNUE net (~48 MB) เขียนลง MEMFS ได้ ; iOS = 1 เธรด
     const hashMB  = IS_MOBILE ? 16 : 64;
-    const threads = IS_MOBILE ? Math.min(2, Math.max(1, cores - 1))
+    const threads = IS_IOS ? 1
+                  : IS_MOBILE ? Math.min(2, Math.max(1, cores - 1))
                               : Math.max(1, Math.min(4, cores - 1));
     this.send("uci");
     this.send("setoption name UCI_Variant value makruk");
     this.send("setoption name Threads value " + threads);
     this.send("setoption name Hash value " + hashMB);
-    await this.ready();
+    try { await withTimeout(this.ready(), 15000, "engine ตอบสนอง"); }
+    catch (e) { this._kill(); throw e; }
     // เขียน NNUE net ลง MEMFS — ถ้าแรมไม่พอ ลองใหม่ด้วย Hash ที่เล็กลงอีก
     let buf;
     try { buf = await this._fetchNet(FSF_DIR+"makruk.nnue", onProgress); }
     catch (e) { console.warn("[fsf] fetch net:", e && e.message || e); this.nnue = false; return true; }
     for (const h of [hashMB, 8, 2]) {
       try {
-        if (h !== hashMB) { this.send("setoption name Hash value " + h); await this.ready(); }
+        if (h !== hashMB) { this.send("setoption name Hash value " + h); await withTimeout(this.ready(), 12000, "ตั้ง Hash"); }
         this.sf.FS.writeFile("/makruk.nnue", new Uint8Array(buf));
         this.send("setoption name EvalFile value /makruk.nnue");
         this.send("setoption name Use NNUE value true");
-        await this.ready(); this.nnue = true; break;
+        await withTimeout(this.ready(), 12000, "เปิด NNUE"); this.nnue = true; break;
       } catch (e) {
         console.warn("[fsf] NNUE write failed at Hash=" + h + ":", e && e.message || e);
         try { this.sf.FS.unlink("/makruk.nnue"); } catch (_) {}
@@ -591,16 +606,25 @@ const fsf = {
   async _fetchNet(url, onProgress) {
     let cache=null; try { cache = await caches.open("fsf-nnue-v1"); } catch(e){}
     if (cache) { const h = await cache.match(url); if (h) { if (onProgress) onProgress(1); return h.arrayBuffer(); } }
-    const resp = await fetch(url); if (!resp.ok) throw new Error("HTTP "+resp.status);
-    const total = +(resp.headers.get("content-length")||0);
-    if (resp.body && total && onProgress) {
-      const rd = resp.body.getReader(); const ch=[]; let got=0;
-      for(;;){ const {done,value}=await rd.read(); if(done)break; ch.push(value); got+=value.length; onProgress(Math.min(1, got/total)); }
+    const resp = await withTimeout(fetch(url), 180000, "ดาวน์โหลด NNUE");
+    if (!resp.ok) throw new Error("HTTP "+resp.status);
+    const total = +(resp.headers.get("content-length")||0) || 47721376;   // .nnue รู้ขนาดแน่นอน
+    if (resp.body && resp.body.getReader) {
+      const rd = resp.body.getReader(); const ch=[]; let got=0; let t0=Date.now();
+      for(;;){
+        const step = await withTimeout(rd.read(), 60000, "สตรีม NNUE");
+        if (step.done) break;
+        ch.push(step.value); got += step.value.length;
+        if (onProgress && Date.now()-t0 > 120) { onProgress(Math.min(0.99, got/total)); t0 = Date.now(); }
+      }
+      if (onProgress) onProgress(1);
       const out = new Uint8Array(got); let off=0; for(const c of ch){ out.set(c,off); off+=c.length; }
       if (cache) try{ await cache.put(url, new Response(out)); }catch(e){}
       return out.buffer;
     }
-    const ab = await resp.arrayBuffer();
+    if (onProgress) onProgress(-1);   // ดาวน์โหลดแบบไม่มีความคืบหน้า
+    const ab = await withTimeout(resp.arrayBuffer(), 180000, "อ่านไฟล์ NNUE");
+    if (onProgress) onProgress(1);
     if (cache) try{ await cache.put(url, new Response(ab)); }catch(e){}
     return ab;
   },
@@ -1203,7 +1227,9 @@ document.querySelectorAll("[data-brain]").forEach((btn) => {
     brainNote.textContent = IS_MOBILE ? "กำลังโหลด Fairy-Stockfish (มือถือ)…" : "กำลังโหลด Fairy-Stockfish…";
     try {
       await fsf.load((frac) => {
-        brainNote.textContent = "โหลดโครงข่าย NNUE (makruk) — " + Math.round(frac*100) + "% · ~48 MB ครั้งเดียว";
+        brainNote.textContent = frac < 0
+          ? "กำลังดาวน์โหลดโครงข่าย NNUE ~48 MB (ครั้งเดียว)…"
+          : "โหลดโครงข่าย NNUE (makruk) — " + Math.round(frac*100) + "% · ~48 MB ครั้งเดียว";
       });
       brain = "fsf"; goSerial++; pendingGo = null; thinking = false;
       frameEl.classList.remove("is-thinking"); setBrainUI("fsf");
@@ -1212,7 +1238,9 @@ document.querySelectorAll("[data-brain]").forEach((btn) => {
         : "Fairy-Stockfish พร้อม (classical eval)";
       maybeEngineMove(); refreshSuggestions();
     } catch (e) {
-      brainNote.textContent = "โหลดไม่สำเร็จ: " + (e && e.message || e) + " — ใช้เอนจิ้น JS ต่อ";
+      brain = "js"; setBrainUI("js");
+      brainNote.innerHTML = "Fairy-Stockfish โหลดไม่สำเร็จ (" + (e && e.message || e) + ") — ใช้เอนจิ้น JS ต่อ" +
+        (IS_IOS ? "<br>บน iPhone/iPad บางรุ่นยังใช้ไม่ได้ · ลองผ่าน Chrome บน Android หรือเครื่องคอมเพื่อเล่นกับตัวเก่งสุด" : "");
     } finally { btn.disabled = false; }
   });
 });
