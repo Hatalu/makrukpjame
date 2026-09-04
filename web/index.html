@@ -1344,9 +1344,24 @@ $("logoutBtn").addEventListener("click", () => {
   showScreen("login");
 });
 $("homeBtn").addEventListener("click", () => showScreen("home"));
+function enterNormalPlay() {
+  // เข้า "เล่นปกติ" ทุกครั้ง -> เริ่มกระดานมาตรฐานใหม่เสมอ
+  // (กันตำแหน่งค้างจากการแก้หมากกล / โหมดตั้งหมาก / เกมก่อนหน้า)
+  activePuzzle = null; exitKom();
+  devSaveMode = false; devEditId = null; $("komGoalBox").hidden = true;
+  if (mode === "setup") exitSetup();
+  mode = "bot"; prevPlayMode = "bot";
+  $("setupPlay").textContent = "เริ่มเล่นจากตำแหน่งนี้";
+  [...$("modeSel").children].forEach(x => x.classList.toggle("on", x.dataset.mode === "bot"));
+  $("playControls").hidden = false; $("setupControls").hidden = true;
+  document.querySelectorAll("[data-botmode]").forEach(x => x.hidden = false);
+  humanSide = "white"; flipped = false; $("side").textContent = "คุณเล่น: ขาว";
+  newGame();
+  showScreen("play");
+}
 document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => {
   const g = b.dataset.go;
-  if (g === "play")  { activePuzzle = null; exitKom(); showScreen("play"); }
+  if (g === "play")  { enterNormalPlay(); }
   else if (g === "kom")  { showScreen("kom"); }
   else if (g === "dev")  { if (session && session.role === "dev") showScreen("dev"); }
   else if (g === "home") { showScreen("home"); }
