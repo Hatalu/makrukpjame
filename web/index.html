@@ -1227,10 +1227,11 @@ const cloud = {
     this._last = Date.now();
     this._p = (async () => {
       try {
-        const [acc, puz, sta] = await Promise.all([
+        const [acc, puz, sta, nam] = await Promise.all([
           this.sb.from("mk_accounts").select("*"),
           this.sb.from("mk_puzzles").select("*"),
           this.sb.from("mk_stats").select("*"),
+          this.sb.from("mk_names").select("*"),
         ]);
         if (!acc.error && acc.data)
           localStorage.setItem("mk_accounts", JSON.stringify(acc.data.map(a => ({ id:String(a.id), pw:a.pw, role:a.role || "user" }))));
@@ -1244,6 +1245,11 @@ const cloud = {
               { moves:r.moves|0, status:r.status || "", goal:r.goal || "", passed:!!r.passed,
                 ts: r.ts ? new Date(r.ts).getTime() : Date.now() };
           localStorage.setItem("mk_stats", JSON.stringify(s));
+        }
+        if (!nam.error && nam.data) {
+          const n = {};
+          for (const r of nam.data) n[String(r.id)] = r.name || "";
+          localStorage.setItem("mk_names", JSON.stringify(n));
         }
         if (screen === "kom") renderKomGrid();
         else if (screen === "dev") renderDev();
@@ -1272,6 +1278,8 @@ const cloud = {
   },
   saveAccount(a) { if (this.on) this._w(this.sb.from("mk_accounts").upsert({ id:String(a.id), pw:a.pw, role:a.role }), "saveAccount"); },
   delAccount(id) { if (this.on) this._w(this.sb.from("mk_accounts").delete().eq("id", String(id)), "delAccount"); },
+  saveName(uid, name) { if (this.on) this._w(this.sb.from("mk_names").upsert({ id:String(uid), name:name || "" }), "saveName"); },
+  async delStatsForUser(uid) { if (this.on) { try { await this.sb.from("mk_stats").delete().eq("uid", String(uid)); } catch (e) { console.warn("[cloud] delStatsForUser:", e); } } },
   async clearStats() { if (this.on) { try { await this.sb.from("mk_stats").delete().not("uid", "is", null); } catch (e) { console.warn("[cloud] clearStats:", e); } } },
 };
 
@@ -1294,14 +1302,16 @@ function showScreen(s) {
   $("userChip").hidden = !session;
   $("homeBtn").hidden = !session || s === "login";
   $("modeSel").style.display = (s === "kom-play") ? "none" : "";
+  // ปุ่ม "ฟังก์ชัน Dev" โชว์เฉพาะผู้มีสิทธิ์ Dev เท่านั้น (ตรวจทุกครั้ง)
+  const isDev = !!(session && session.role === "dev");
+  document.querySelector('.homecard.dev').hidden = !isDev;
+  if (!isDev && s === "dev") { showScreen("home"); return; }   // กันเข้าหน้า Dev โดยไม่มีสิทธิ์
   if (s === "kom") renderKomGrid();
   if (s === "dev") renderDev();
   if (["home","kom","dev","kom-play"].includes(s)) cloud.pull();   // ดึงข้อมูลล่าสุดจากฐานข้อมูลกลาง
   if (s === "play" || s === "kom-play") { sizeBoard(); refreshSuggestions(); }
-  if (s === "home") {
+  if (s === "home")
     $("homeHi").textContent = "รหัส " + session.id + " · สิทธิ " + (session.role === "dev" ? "Dev" : "ธรรมดา");
-    document.querySelector('.homecard.dev').hidden = (session.role !== "dev");
-  }
   window.scrollTo(0, 0);
 }
 function applySession() {
@@ -1358,6 +1368,15 @@ function allPuzzles() {
   return out;
 }
 function loadStats() { try { return JSON.parse(localStorage.getItem("mk_stats")||"{}"); } catch(e){ return {}; } }
+function userNames() { try { return JSON.parse(localStorage.getItem("mk_names")||"{}"); } catch(e){ return {}; } }
+function userNameOf(uid) { return userNames()[String(uid)] || ""; }
+function setUserName(uid, name) {
+  const n = userNames(); const v = (name || "").trim();
+  if (v) n[String(uid)] = v; else delete n[String(uid)];
+  localStorage.setItem("mk_names", JSON.stringify(n));
+  cloud.saveName(uid, v);
+}
+function userLabel(uid) { const nm = userNameOf(uid); return nm ? (nm + " (" + uid + ")") : String(uid); }
 
 // ---- เป้าหมายหมากกล ----
 function goalText(g) {
@@ -1485,14 +1504,17 @@ function renderDevStats() {
   for (const u of Object.keys(stats)) if (!ids.includes(u)) ids.push(u);
   const roleOf = (id) => { const a = allAccounts().find(x => x.id === id); return a ? (a.role === "dev" ? "Dev" : "ธรรมดา") : "—"; };
 
-  let html = "<p class='lead'>เลือกผู้เล่นเพื่อดูว่าแก้หมากกลไปแล้วกี่ข้อ และผ่านหรือยัง</p><div class='dev-list'>";
+  let html = "<p class='lead'>เลือกผู้เล่นเพื่อดูว่าแก้หมากกลไปแล้วกี่ข้อ และผ่านหรือยัง · กด \"ตั้งชื่อ\" เพื่อจำว่าใครเป็นใคร</p><div class='dev-list'>";
   for (const id of ids) {
     const rec = stats[id] || {};
     const done = Object.keys(rec).length;
     const passed = Object.values(rec).filter(r => r.passed).length;
     const sel = id === devStatUid ? " style='border-color:var(--accent);color:var(--accent)'" : "";
-    html += `<div class="dev-row"><span><b>${id}</b> · ${roleOf(id)}</span><span class="spacer"></span>` +
+    const nm = userNameOf(id);
+    html += `<div class="dev-row" style="flex-wrap:wrap"><span><b>${nm || id}</b>` +
+            (nm ? ` <span style="color:var(--ink-soft)">(${id})</span>` : "") + ` · ${roleOf(id)}</span><span class="spacer"></span>` +
             `<span style="color:var(--ink-soft)">แก้ ${done} · ผ่าน ${passed}</span>` +
+            `<button data-nameuid="${id}">ตั้งชื่อ</button>` +
             `<button data-suid="${id}"${sel}>ดูรายละเอียด</button></div>`;
   }
   html += "</div><div id='devUserDetail' style='margin-top:14px'></div>";
@@ -1504,6 +1526,14 @@ function renderDevStats() {
   $("devStats").innerHTML = html;
   $("devStats").querySelectorAll("button[data-suid]").forEach(b =>
     b.addEventListener("click", () => { devStatUid = (devStatUid === b.dataset.suid) ? null : b.dataset.suid; renderDevStats(); }));
+  $("devStats").querySelectorAll("button[data-nameuid]").forEach(b =>
+    b.addEventListener("click", () => {
+      const uid = b.dataset.nameuid;
+      const nn = prompt("ตั้งชื่อเรียกของผู้เล่น " + uid + "  (เว้นว่าง = ลบชื่อ)", userNameOf(uid));
+      if (nn === null) return;
+      setUserName(uid, nn);
+      renderDevStats();
+    }));
   $("devClearStats").addEventListener("click", async () => {
     if (!confirm(cloud.on ? "ล้างสถิติของผู้เล่นทุกคนในฐานข้อมูลกลาง?" : "ล้างสถิติทั้งหมด?")) return;
     localStorage.removeItem("mk_stats"); devStatUid = null;
@@ -1516,10 +1546,21 @@ function renderDevUserDetail(uid) {
   const box = $("devUserDetail"); if (!box) return;
   const rec = loadStats()[uid] || {};
   const pids = Object.keys(rec);
-  if (!pids.length) { box.innerHTML = `<p class='lead'>ผู้เล่น <b>${uid}</b> ยังไม่ได้แก้หมากกลในเบราว์เซอร์นี้</p>`; return; }
+  const head = `<h2 style="font-size:13px;letter-spacing:.1em;margin-bottom:6px">สถิติของ ${userLabel(uid)}</h2>`;
+  const resetBtn = `<button class='bigbtn ghost' style='width:auto;padding:8px 16px;margin-top:12px' id='devResetUser' type='button'>รีเซ็ตสถิติของผู้เล่นนี้` + (cloud.on ? " (ทุกเครื่อง)" : "") + `</button>`;
+  function wire() {
+    const rb = $("devResetUser");
+    if (rb) rb.addEventListener("click", async () => {
+      if (!confirm("รีเซ็ตสถิติทั้งหมดของ " + userLabel(uid) + " ?")) return;
+      const s = loadStats(); delete s[uid]; localStorage.setItem("mk_stats", JSON.stringify(s));
+      await cloud.delStatsForUser(uid);
+      renderDevStats();
+    });
+  }
+  if (!pids.length) { box.innerHTML = head + `<p class='lead'>ยังไม่ได้แก้หมากกล</p>`; return; }
   const puzz = allPuzzles();
   const passed = pids.filter(p => rec[p].passed).length;
-  let html = `<h2 style="font-size:13px;letter-spacing:.1em;margin-bottom:6px">สถิติของ ${uid}</h2>` +
+  let html = head +
     `<p class='lead' style='margin-bottom:8px'>แก้ไปแล้ว <b>${pids.length}</b> หมากกล · ` +
     `<span style="color:var(--pos)">ผ่าน ${passed}</span> · <span style="color:var(--neg)">ยังไม่ผ่าน ${pids.length - passed}</span></p>` +
     "<table class='dev'><tr><th>หมากกล</th><th>เป้าหมาย</th><th>ตาที่เดิน</th><th>สถานะ</th><th>ล่าสุด</th></tr>";
@@ -1532,8 +1573,9 @@ function renderDevUserDetail(uid) {
                 `<td class="${cls}">${r.passed ? "ผ่าน ✓" : "ยังไม่ผ่าน"}</td>` +
                 `<td>${r.ts ? new Date(r.ts).toLocaleString("th-TH") : "—"}</td></tr>`;
       });
-  html += "</table>";
+  html += "</table>" + resetBtn;
   box.innerHTML = html;
+  wire();
 }
 function renderDevPuzzles() {
   const custom = customPuzzles();
@@ -1573,10 +1615,11 @@ function renderDevPuzzles() {
 }
 function renderDevAccounts() {
   const extra = extraAccounts();
+  const nmOf = (id) => { const v = userNameOf(id); return v ? ` <span style="color:var(--ink-soft)">— ${v}</span>` : ""; };
   let html = "<div class='dev-list'>";
-  html += "<div class='dev-row'><span><b>66121360201</b> · Dev (ในตัว)</span></div>";
+  html += "<div class='dev-row'><span><b>66121360201</b>" + nmOf("66121360201") + " · Dev (ในตัว)</span></div>";
   extra.forEach((a, i) => {
-    html += `<div class="dev-row"><span><b>${a.id}</b> · ${a.role === "dev" ? "Dev" : "ธรรมดา"}</span><span class="spacer"></span>` +
+    html += `<div class="dev-row"><span><b>${a.id}</b>${nmOf(a.id)} · ${a.role === "dev" ? "Dev" : "ธรรมดา"}</span><span class="spacer"></span>` +
             `<button data-ai="${i}">ลบ</button></div>`;
   });
   html += "</div>";
