@@ -526,6 +526,10 @@ const GLYPH = { P:"♟", N:"♞", S:"♝", M:"♛", R:"♜", K:"♚" };
 const START_FEN = "rnsmksnr/8/pppppppp/8/8/PPPPPPPP/8/RNSKMSNR w - - 0 1";
 const FSF_DIR = "./fairy/";
 const MOVE_TIME = 1800, ANALYZE_TIME = 1500;
+// มือถือ = จอเล็ก/จอสัมผัส -> ตั้งค่า Fairy-Stockfish ให้กินแรมน้อย จะได้โหลด NNUE ได้
+const IS_MOBILE = (window.matchMedia && matchMedia("(pointer: coarse)").matches)
+  || /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent || "")
+  || Math.min(window.screen ? window.screen.width : 9999, window.screen ? window.screen.height : 9999) <= 820;
 const PIECE_MAX = { K:1, R:2, N:2, S:2, P:8, M:12 };
 
 let mode = "bot";            // 'bot' | '2p' | 'setup'
@@ -556,27 +560,42 @@ const fsf = {
       document.head.appendChild(s); });
     this.sf = await window.Stockfish({ locateFile:(p)=>FSF_DIR+p });
     this.sf.addMessageListener((l)=>this.onLine(String(l)));
+    const cores = navigator.hardwareConcurrency || 2;
+    // มือถือ: hash เล็ก + เธรดน้อย เพื่อเหลือแรมให้ NNUE net (~48 MB) เขียนลง MEMFS ได้
+    const hashMB  = IS_MOBILE ? 16 : 64;
+    const threads = IS_MOBILE ? Math.min(2, Math.max(1, cores - 1))
+                              : Math.max(1, Math.min(4, cores - 1));
     this.send("uci");
     this.send("setoption name UCI_Variant value makruk");
-    this.send("setoption name Hash value 192");
-    this.send("setoption name Threads value " + Math.max(1, Math.min(6, (navigator.hardwareConcurrency||2)-1)));
+    this.send("setoption name Threads value " + threads);
+    this.send("setoption name Hash value " + hashMB);
     await this.ready();
-    try {
-      const buf = await this._fetchNet(FSF_DIR+"makruk.nnue", onProgress);
-      this.sf.FS.writeFile("/makruk.nnue", new Uint8Array(buf));
-      this.send("setoption name EvalFile value /makruk.nnue");
-      await this.ready(); this.nnue = true;
-    } catch (e) { this.nnue = false; console.warn("NNUE:", e); }
+    // เขียน NNUE net ลง MEMFS — ถ้าแรมไม่พอ ลองใหม่ด้วย Hash ที่เล็กลงอีก
+    let buf;
+    try { buf = await this._fetchNet(FSF_DIR+"makruk.nnue", onProgress); }
+    catch (e) { console.warn("[fsf] fetch net:", e && e.message || e); this.nnue = false; return true; }
+    for (const h of [hashMB, 8, 2]) {
+      try {
+        if (h !== hashMB) { this.send("setoption name Hash value " + h); await this.ready(); }
+        this.sf.FS.writeFile("/makruk.nnue", new Uint8Array(buf));
+        this.send("setoption name EvalFile value /makruk.nnue");
+        this.send("setoption name Use NNUE value true");
+        await this.ready(); this.nnue = true; break;
+      } catch (e) {
+        console.warn("[fsf] NNUE write failed at Hash=" + h + ":", e && e.message || e);
+        try { this.sf.FS.unlink("/makruk.nnue"); } catch (_) {}
+      }
+    }
     return true;
   },
   async _fetchNet(url, onProgress) {
     let cache=null; try { cache = await caches.open("fsf-nnue-v1"); } catch(e){}
-    if (cache) { const h = await cache.match(url); if (h) return h.arrayBuffer(); }
+    if (cache) { const h = await cache.match(url); if (h) { if (onProgress) onProgress(1); return h.arrayBuffer(); } }
     const resp = await fetch(url); if (!resp.ok) throw new Error("HTTP "+resp.status);
     const total = +(resp.headers.get("content-length")||0);
     if (resp.body && total && onProgress) {
       const rd = resp.body.getReader(); const ch=[]; let got=0;
-      for(;;){ const {done,value}=await rd.read(); if(done)break; ch.push(value); got+=value.length; onProgress(got/total); }
+      for(;;){ const {done,value}=await rd.read(); if(done)break; ch.push(value); got+=value.length; onProgress(Math.min(1, got/total)); }
       const out = new Uint8Array(got); let off=0; for(const c of ch){ out.set(c,off); off+=c.length; }
       if (cache) try{ await cache.put(url, new Response(out)); }catch(e){}
       return out.buffer;
@@ -1174,12 +1193,14 @@ document.querySelectorAll("[data-brain]").forEach((btn) => {
       return;
     }
     if (!window.crossOriginIsolated) {
-      brainNote.innerHTML = "Fairy-Stockfish ใช้ไม่ได้ในหน้านี้ — เปิดที่ " +
-        '<a href="https://hatalu.github.io/makrukpjame/" target="_blank" rel="noopener">hatalu.github.io/makrukpjame</a>';
+      const onSite = /hatalu\.github\.io/.test(location.host);
+      brainNote.innerHTML = onSite
+        ? "เบราว์เซอร์นี้ยังเปิด cross-origin isolation ไม่ได้ — ลอง <b>รีเฟรชหน้า</b> อีกครั้ง หรือใช้ Chrome/Safari รุ่นใหม่"
+        : 'Fairy-Stockfish ใช้ได้เฉพาะบนเว็บจริง — เปิดที่ <a href="https://hatalu.github.io/makrukpjame/" target="_blank" rel="noopener">hatalu.github.io/makrukpjame</a>';
       return;
     }
     btn.disabled = true;
-    brainNote.textContent = "กำลังโหลด Fairy-Stockfish…";
+    brainNote.textContent = IS_MOBILE ? "กำลังโหลด Fairy-Stockfish (มือถือ)…" : "กำลังโหลด Fairy-Stockfish…";
     try {
       await fsf.load((frac) => {
         brainNote.textContent = "โหลดโครงข่าย NNUE (makruk) — " + Math.round(frac*100) + "% · ~48 MB ครั้งเดียว";
