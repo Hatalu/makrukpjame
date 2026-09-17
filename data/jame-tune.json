@@ -1,0 +1,107 @@
+{
+ "depth": 5,
+ "oppd": 2,
+ "games": 12,
+ "baseline": 62.5,
+ "results": [
+  {
+   "name": "เอนจิ้นปกติ (baseline)",
+   "params": null,
+   "w": 3,
+   "d": 9,
+   "l": 0,
+   "pct": 62.5
+  },
+  {
+   "name": "JameAI margin=20 convertAt=120",
+   "params": {
+    "margin": 20,
+    "convertAt": 120
+   },
+   "w": 3,
+   "d": 9,
+   "l": 0,
+   "pct": 62.5
+  },
+  {
+   "name": "JameAI margin=20 convertAt=250",
+   "params": {
+    "margin": 20,
+    "convertAt": 250
+   },
+   "w": 3,
+   "d": 9,
+   "l": 0,
+   "pct": 62.5
+  },
+  {
+   "name": "JameAI margin=30 convertAt=120",
+   "params": {
+    "margin": 30,
+    "convertAt": 120
+   },
+   "w": 3,
+   "d": 9,
+   "l": 0,
+   "pct": 62.5
+  },
+  {
+   "name": "JameAI margin=30 convertAt=250",
+   "params": {
+    "margin": 30,
+    "convertAt": 250
+   },
+   "w": 3,
+   "d": 9,
+   "l": 0,
+   "pct": 62.5
+  },
+  {
+   "name": "JameAI margin=45 convertAt=120",
+   "params": {
+    "margin": 45,
+    "convertAt": 120
+   },
+   "w": 3,
+   "d": 9,
+   "l": 0,
+   "pct": 62.5
+  },
+  {
+   "name": "JameAI margin=45 convertAt=250",
+   "params": {
+    "margin": 45,
+    "convertAt": 250
+   },
+   "w": 3,
+   "d": 9,
+   "l": 0,
+   "pct": 62.5
+  }
+ ],
+ "best": {
+  "name": "JameAI margin=20 convertAt=120",
+  "params": {
+   "margin": 20,
+   "convertAt": 120
+  },
+  "w": 3,
+  "d": 9,
+  "l": 0,
+  "pct": 62.5
+ },
+ "defaults": {
+  "contempt": 45,
+  "margin": 30,
+  "minEdge": 0,
+  "minRisk": 60,
+  "maxCandidates": 3,
+  "riskWeight": 0.06,
+  "drawTolerance": 70,
+  "verifyFrac": 0.45,
+  "verifyExtra": 1,
+  "convertAt": 250,
+  "desperateAt": -250
+ },
+ "at": "2026-09-17T09:05:24.580Z"
+}
