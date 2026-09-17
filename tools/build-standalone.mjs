@@ -24,6 +24,7 @@ const ORDER = [
   'src/search.js',
   'src/book.js',
   'src/engine.js',
+  'src/jameai.js',
 ];
 
 function strip(src) {
@@ -47,6 +48,7 @@ for (const f of ORDER) {
 const WORKER_GLUE = `
 /* ==== worker glue ==== */
 const engine = new MakrukEngine({ hash: 64 });
+const jameAI = new JameAI(engine);
 let busy = false;
 function postState() {
   self.postMessage({ type:'state', fen:engine.fen(), turn:engine.turnName(), ply:engine.ply(),
@@ -116,6 +118,44 @@ self.onmessage = (ev) => {
             moves.sort((a, b) => b.score - a.score);
           } catch (e) {}
           self.postMessage({ type: 'analysis', serial, moves, depth });
+        }, 0);
+        break;
+      }
+      case 'jame-cands': {
+        // JameAI: รายชื่อ "ตาแหก" (เสียสละจริง) ของตำแหน่งปัจจุบัน — ไม่ค้นหา แค่ให้คะแนนความแหก
+        const o = jameAI.opts, out = [];
+        for (const m of legalMoves(engine.board)) {
+          const { risk } = riskScore(engine.board, m);
+          if (risk >= o.minRisk) out.push({ uci: moveToUci(m), risk });
+        }
+        out.sort((a, b) => b.risk - a.risk);
+        self.postMessage({ type:'jame-cands', serial: msg.serial || 0, cands: out.slice(0, o.maxCandidates).map(x => x.uci) });
+        break;
+      }
+      case 'jame-pick': {
+        // JameAI บนแกน Fairy-Stockfish: รับผล MultiPV มา แล้วตัดสินใจเชิงบุคลิก
+        const r = jameAI.pickFromLines(msg.lines || []);
+        self.postMessage({ type:'jame-pick', serial: msg.serial || 0,
+          uci: r ? r.uci : null, jame: r ? r.jame : null, note: r ? jameNote(r.jame) : '' });
+        break;
+      }
+      case 'jame-go': {
+        // JameAI บนเอนจิ้น JS (ใช้ได้ทุกที่ รวม iPhone)
+        if (busy) { self.postMessage({ type:'error', message:'engine busy' }); break; }
+        busy = true;
+        const serial = msg.serial || 0;
+        setTimeout(() => {
+          let result = null;
+          try {
+            result = jameAI.pickMove({ movetime: msg.movetime || 1500 },
+              (info) => self.postMessage({ type:'info', serial, ...info, pvSan: pvSan(info.pv) }));
+          } catch (e) { self.postMessage({ type:'error', message:String(e && e.message || e) }); }
+          busy = false;
+          if (result && result.bestMove)
+            self.postMessage({ type:'bestmove', serial, move:result.bestMove, san:safeSan(result.move),
+              book:false, score:result.score, depth:result.depth, nodes:result.nodes, nps:result.nps,
+              pv:result.pv, pvSan:pvSan(result.pv), jame:result.jame, note: jameNote(result.jame) });
+          else self.postMessage({ type:'bestmove', serial, move:null });
         }, 0);
         break;
       }

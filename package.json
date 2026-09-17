@@ -10,7 +10,7 @@
     "./worker": "./worker/engine.worker.js"
   },
   "scripts": {
-    "test": "node test/perft.mjs && node test/rules.mjs",
+    "test": "node test/perft.mjs && node test/rules.mjs && node test/jameai.mjs --games 4 --depth 3",
     "test:perft": "node test/perft.mjs",
     "test:rules": "node test/rules.mjs",
     "play": "node examples/cli.mjs",

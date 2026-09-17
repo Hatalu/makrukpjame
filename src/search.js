@@ -34,7 +34,7 @@ const _seeGain = new Int32Array(40);
  * SEE - static exchange evaluation บนช่อง m.to (มุมมองฝ่ายที่เดิน m)
  * ใช้เฉพาะกับหมากกินตัว  คืนผลได้-เสียสุทธิ (centipawn)
  */
-function see(bd, m) {
+export function see(bd, m) {
   const to = m.to, from = m.from;
   let side = pcColor(bd[from]) ^ 1;
   for (let i = 0; i < 64; i++) _seeOcc[i] = bd[i] !== EMPTY ? 1 : 0;
@@ -150,6 +150,7 @@ export class Search {
    */
   think(board, limits = {}, onInfo) {
     this.board = board;
+    this.rootTurn = board.turn;   // ใช้อ้างอิง contempt (ดู _drawScore)
     this.nodes = 0;
     this.stopped = false;
     this.startTime = now();
@@ -283,8 +284,10 @@ export class Search {
   }
 
   _drawScore() {
-    // contempt เล็กน้อย: ฝ่ายเดินไม่ชอบเสมอ
-    return DRAW_SCORE - (this.board.turn === WHITE ? this.contempt : -this.contempt);
+    // contempt แบบอิงฝ่ายที่ราก: ฝ่ายเรา "ไม่ชอบเสมอ" ตลอดทั้งต้นไม้
+    // (คะแนนเป็นมุมมองฝ่ายที่ต้องเดิน ณ โหนดนั้น -> เสมอ = -contempt เมื่อถึงตาเรา)
+    const rootTurn = this.rootTurn === undefined ? WHITE : this.rootTurn;
+    return DRAW_SCORE + (this.board.turn === rootTurn ? -this.contempt : this.contempt);
   }
 
   // ----------------------------------------------------------- alpha-beta

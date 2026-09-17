@@ -227,6 +227,10 @@
   .setup-row .msg.bad { color:var(--neg); } .setup-row .msg.ok { color:var(--pos); }
 
   .stat { font-size:12.5px; line-height:1.8; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+  .jame-note { margin-top:8px; font-size:12.5px; line-height:1.5; padding:7px 10px; border-radius:8px;
+    border:1px solid var(--line); background:var(--surface-2); color:var(--ink-soft); }
+  .jame-note.hot  { border-color:var(--accent); color:var(--ink); background:color-mix(in srgb,var(--accent) 12%,var(--surface-2)); }
+  .jame-note.warm { border-color:var(--brass); color:var(--ink); }
   .stat b { color:var(--ink); }
   .stat .pv { display:block; font-size:11px; margin-top:2px; word-break:break-all; opacity:.85; }
 
@@ -413,6 +417,7 @@
       <div><span class="count-pill" id="countPill">ยังไม่เริ่มนับ</span></div>
       <div class="result" id="result"></div>
       <div class="stat" id="engineStat" style="margin-top:8px"></div>
+      <div class="jame-note" id="jameNote" hidden></div>
     </div>
   </aside>
 
@@ -439,6 +444,7 @@
         <div class="segbtns" id="brainSel" style="margin-top:12px">
           <button type="button" data-brain="js" class="on">เอนจิ้นเบา (JS)</button>
           <button type="button" data-brain="fsf">Fairy-Stockfish</button>
+          <button type="button" data-brain="jame" title="บุคลิกนักแหกหมาก — ไม่ชอบเสมอ ทิ้งหมากเมื่อคำนวณแล้วยังได้เปรียบ">JameAI</button>
         </div>
         <p class="hintline" id="brainNote">บอทเล่นเต็มกำลัง (Best Move) เสมอ</p>
       </div>
@@ -526,6 +532,10 @@ const GLYPH = { P:"♟", N:"♞", S:"♝", M:"♛", R:"♜", K:"♚" };
 const START_FEN = "rnsmksnr/8/pppppppp/8/8/PPPPPPPP/8/RNSKMSNR w - - 0 1";
 const FSF_DIR = "./fairy/";
 const MOVE_TIME = 1800, ANALYZE_TIME = 1500;
+// JameAI: คิดนานกว่าบอทปกติ + ดูหลายเส้น (MultiPV) + เกลียดเสมอ
+// เฟส A: ค้นหาเต็มกำลัง MultiPV 1 (นานกว่าบอทปกติ -> ลึกกว่า)  เฟส B: เจาะเฉพาะตาแหกด้วย searchmoves
+const JAME_TIME_A = 2400, JAME_TIME_B = 1400;   // (Fairy-Stockfish รุ่นนี้ไม่มี Contempt — จัดการเรื่องเสมอที่ชั้น JameAI)
+const usingFsfCore = () => (brain === "fsf" || brain === "jame") && !!fsf.sf;
 // มือถือ = จอเล็ก/จอสัมผัส -> ตั้งค่า Fairy-Stockfish ให้กินแรมน้อย จะได้โหลด NNUE ได้
 const IS_MOBILE = (window.matchMedia && matchMedia("(pointer: coarse)").matches)
   || /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent || "")
@@ -557,7 +567,12 @@ const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent || "")
 
 const fsf = {
   sf:null, nnue:false, _readyCb:null, curSerial:0, mode:null, multipv:1,
-  send(c){ if(this.sf) this.sf.postMessage(c); },
+  searching:false, ignoreNext:0,   // กัน bestmove ค้างจากการ stop มาปนกับการค้นหาใหม่
+  send(c){
+    if(!this.sf) return;
+    if (c.indexOf("go ") === 0) this.searching = true;
+    this.sf.postMessage(c);
+  },
   ready(){ return new Promise((res)=>{ this._readyCb=res; this.send("isready"); }); },
   _kill() {
     try { this.sf && this.sf.terminate && this.sf.terminate(); } catch (e) {}
@@ -640,29 +655,80 @@ const fsf = {
       if (this.mode === "analyze") {
         analysis.onFsfInfo({ idx:(mp?+mp[1]:1), score, mate:(sc&&sc[1]==="mate")?+sc[2]:undefined,
           depth:d?+d[1]:0, pv, serial:this.curSerial });
+      } else if (this.mode === "jame") {
+        const idx = mp ? +mp[1] : 1;
+        this.jameRows[idx] = { uci: pv[0], score, depth: d?+d[1]:0 };
+        if (this.jamePhase === "A") onEngineMessage({ type:"info", serial:this.curSerial, depth:d?+d[1]:0, score,
+          scoreType:(sc&&sc[1]==="mate")?"mate":"cp", mate:(sc&&sc[1]==="mate")?+sc[2]:undefined,
+          nodes:nd?+nd[1]:0, nps:ns?+ns[1]:0, pv, pvSan:null });
       } else {
         onEngineMessage({ type:"info", serial:this.curSerial, depth:d?+d[1]:0, score,
           scoreType:(sc&&sc[1]==="mate")?"mate":"cp", mate:(sc&&sc[1]==="mate")?+sc[2]:undefined,
           nodes:nd?+nd[1]:0, nps:ns?+ns[1]:0, pv, pvSan:null });
       }
     } else if (line.indexOf("bestmove")===0) {
+      this.searching = false;
+      if (this.ignoreNext > 0) { this.ignoreNext--; return; }   // ผลของการค้นหาที่ถูกสั่ง stop ไปแล้ว
       const mv = line.split(/\s+/)[1];
       if (this.mode === "analyze") analysis.onFsfDone(this.curSerial);
-      else onEngineMessage({ type:"bestmove", serial:this.curSerial, move:(mv&&mv!=="(none)")?mv:null, san:null });
-      this.mode = null;
+      else if (this.mode === "jame" && this.jamePhase === "A") {
+        const row = this.jameRows[1] || { uci: mv, score: 0, depth: 0 };
+        this.jameBestA = { uci: (mv && mv !== "(none)") ? mv : row.uci, score: row.score, depth: row.depth };
+        if (!this.jameBestA.uci) { onEngineMessage({ type:"bestmove", serial:this.curSerial, move:null, san:null }); this.mode = null; return; }
+        if (this.jameCands !== undefined) this._jameAfterA();    // ถ้ายังไม่ได้ cands จะไปต่อตอนรับข้อความ
+        return;
+      }
+      else if (this.mode === "jame" && this.jamePhase === "B") {
+        const lines = Object.values(this.jameRows || {}).filter(r => r && r.uci);
+        if (!lines.some(r => r.uci === this.jameBestA.uci)) lines.push(this.jameBestA);
+        post({ type:"jame-pick", serial:this.curSerial, lines });
+        this.mode = null;
+      }
+      else { onEngineMessage({ type:"bestmove", serial:this.curSerial, move:(mv&&mv!=="(none)")?mv:null, san:null }); this.mode = null; }
     }
   },
+  _setContempt(c){ /* Fairy-Stockfish 1.1.x ไม่มี option Contempt — คงไว้เป็น no-op */ this.contempt = c; },
+  goJame(kind) {
+    if (this.searching) this.stop();
+    this.mode = "jame"; this.curSerial = goSerial; this.jamePhase = "A"; this.jameRows = {};
+    this.jameCands = undefined; this.jameBestA = null; this.jameKind = kind;
+    this._setMultipv(1); this._setContempt(45);
+    post({ type:"jame-cands", serial: goSerial });          // ขอรายชื่อตาแหกจาก worker (เร็ว)
+    this.send("position fen " + baseFen + (uciHistory.length ? " moves "+uciHistory.join(" ") : ""));
+    this.send("go movetime " + (kind==="hint" ? 1200 : JAME_TIME_A));
+  },
+  _jameAfterA() {
+    // เฟส A จบ + รู้รายชื่อตาแหกแล้ว -> ตัดสินว่าต้องเฟส B ไหม
+    const best = this.jameBestA;
+    const cands = (this.jameCands || []).filter(u => u !== best.uci);
+    if (!cands.length) {
+      onEngineMessage({ type:"bestmove", serial:this.curSerial, move:best.uci, san:null,
+        jame:{ mode:"best", reason:"ไม่มีตาแหกที่น่าลอง" }, note:"ยังไม่มีช่องแหก — เดินตามหลักไปก่อน" });
+      this.mode = null; return;
+    }
+    this.jamePhase = "B"; this.jameRows = {};
+    this._setMultipv(1 + cands.length);
+    this.send("position fen " + baseFen + (uciHistory.length ? " moves "+uciHistory.join(" ") : ""));
+    // ใช้ depth แทน movetime (searchmoves + movetime ในบิลด์นี้ไม่หยุดตามเวลา) + ตั้งเวลานิรภัยส่ง stop เอง
+    const dB = Math.max(6, (best.depth || 8) + 1);
+    this.send("go searchmoves " + [best.uci, ...cands].join(" ") + " depth " + dB);
+    const ser = this.curSerial;
+    setTimeout(() => { if (this.mode === "jame" && this.jamePhase === "B" && this.curSerial === ser && this.searching) this.send("stop"); },
+      this.jameKind === "hint" ? 900 : JAME_TIME_B);
+  },
   goMove(kind) {
-    this.mode = "move"; this.curSerial = goSerial; this._setMultipv(1);
+    if (this.searching) this.stop();
+    this.mode = "move"; this.curSerial = goSerial; this._setMultipv(1); this._setContempt(0);
     this.send("position fen " + baseFen + (uciHistory.length ? " moves "+uciHistory.join(" ") : ""));
     this.send("go movetime " + (kind==="hint" ? 900 : MOVE_TIME));
   },
   goAnalyze(serial) {
-    this.mode = "analyze"; this.curSerial = serial; this._setMultipv(6);
+    if (this.searching) this.stop();
+    this.mode = "analyze"; this.curSerial = serial; this._setMultipv(6); this._setContempt(0);
     this.send("position fen " + baseFen + (uciHistory.length ? " moves "+uciHistory.join(" ") : ""));
     this.send("go movetime " + ANALYZE_TIME);
   },
-  stop(){ this.send("stop"); },
+  stop(){ if (this.searching) { this.ignoreNext++; this.searching = false; } this.send("stop"); },
   newgame(){ this.send("ucinewgame"); },
 };
 
@@ -701,11 +767,21 @@ function onEngineMessage(m) {
         if (m.move) { hintArrow = { from:sqIdx(m.move.slice(0,2)), to:sqIdx(m.move.slice(2,4)) };
           render(); turnText.textContent = "แนะนำ: " + (m.move); }
       } else if (m.move && !gameOver) {
+        if (m.note) showJameNote(m.note, m.jame);
         post({ type:"domove", uci:m.move });
       } else if (!m.move) { turnText.textContent = "บอทไม่มีหมากเดิน"; }
       break;
     }
     case "analysis": analysis.onJsResult(m); break;
+    case "jame-pick":
+      onEngineMessage({ type:"bestmove", serial:m.serial, move:m.uci, san:null, jame:m.jame, note:m.note });
+      break;
+    case "jame-cands":
+      if (fsf.mode === "jame" && m.serial === fsf.curSerial) {
+        fsf.jameCands = m.cands || [];
+        if (fsf.jamePhase === "A" && fsf.jameBestA) fsf._jameAfterA();   // เฟส A จบก่อน cands มาถึง
+      }
+      break;
     case "eval": setEval(m.cp); break;
     case "error": engineStat.textContent = "ผิดพลาด: " + m.message;
       thinking = false; frameEl.classList.remove("is-thinking"); break;
@@ -721,6 +797,7 @@ function updateTurnText(inChk) {
 
 /* ---------------- game flow ---------------- */
 function newGame() {
+  { const jn = $("jameNote"); if (jn && brain === "jame") jn.textContent = "JameAI: เกมใหม่"; }
   baseFen = START_FEN; sanList = []; uciHistory = []; selected = -1; lastMove = null;
   hintArrow = null; gameOver = false; pendingGo = null; goSerial++;
   if (fsf.sf) { fsf.stop(); fsf.newgame(); }
@@ -739,8 +816,18 @@ function startGo(kind) {
   frameEl.classList.add("is-thinking");
   turnText.textContent = kind==="hint" ? "กำลังหาคำแนะนำ…" : "บอทกำลังคิด…";
   analysis.cancel();
-  if (brain === "fsf" && fsf.sf) fsf.goMove(kind);
+  if (brain === "jame") {
+    if (fsf.sf) fsf.goJame(kind);
+    else post({ type:"jame-go", serial:goSerial, movetime: kind==="hint" ? 1200 : JAME_TIME_A + JAME_TIME_B });
+  }
+  else if (brain === "fsf" && fsf.sf) fsf.goMove(kind);
   else post({ type:"go", serial:goSerial, movetime: kind==="hint" ? 900 : MOVE_TIME });
+}
+function showJameNote(note, jame) {
+  const el = $("jameNote"); if (!el) return;
+  el.hidden = false;
+  el.className = "jame-note" + (jame && jame.mode === "sacrifice" ? " hot" : jame && jame.mode === "antidraw" ? " warm" : "");
+  el.textContent = "JameAI: " + note;
 }
 function maybeEngineMove() {
   if (mode !== "bot" || gameOver || thinking || pendingGo) return;
@@ -883,7 +970,7 @@ const analysis = {
     const s = ++this.serial; this.running = true;
     suggTurn.textContent = "(ฝ่าย" + (turn==="white"?"ขาว":"ดำ") + ")";
     this.clearUI("กำลังวิเคราะห์…");
-    if (brain === "fsf" && fsf.sf) { this.fsfRows = {}; fsf.goAnalyze(s); }
+    if (usingFsfCore()) { this.fsfRows = {}; fsf.goAnalyze(s); }
     else post({ type:"analyze", serial:s, movetime:ANALYZE_TIME });
   },
   onFsfInfo(d) {
@@ -1213,7 +1300,32 @@ document.querySelectorAll("[data-brain]").forEach((btn) => {
       brain = "js"; goSerial++; pendingGo = null; thinking = false;
       frameEl.classList.remove("is-thinking"); setBrainUI("js");
       brainNote.textContent = "เอนจิ้น JS (เบา · ทำงานได้ทุกที่)";
+      const jn0 = $("jameNote"); if (jn0) jn0.hidden = true;
       maybeEngineMove(); refreshSuggestions();
+      return;
+    }
+    if (want === "jame") {
+      // JameAI ขี่บนแกนที่แรงสุดที่หาได้: Fairy-Stockfish+NNUE ถ้าโหลดได้ ไม่งั้นเอนจิ้น JS
+      btn.disabled = true;
+      const finish = (coreName) => {
+        brain = "jame"; goSerial++; pendingGo = null; thinking = false;
+        frameEl.classList.remove("is-thinking"); setBrainUI("jame");
+        brainNote.textContent = "JameAI พร้อม · แกน " + coreName + " · ไม่ชอบเสมอ · ทิ้งหมากเมื่อคำนวณแล้วยังได้เปรียบ";
+        const jn = $("jameNote"); if (jn) { jn.hidden = false; jn.className = "jame-note"; jn.textContent = "JameAI: กำลังรอตาเดิน…"; }
+        maybeEngineMove(); refreshSuggestions();
+      };
+      if (fsf.sf) { finish("Fairy-Stockfish" + (fsf.nnue ? "+NNUE" : "")); btn.disabled = false; return; }
+      if (!window.crossOriginIsolated) { finish("JS"); btn.disabled = false; return; }
+      brainNote.textContent = "JameAI: กำลังโหลดแกน Fairy-Stockfish…";
+      try {
+        await fsf.load((frac) => {
+          brainNote.textContent = frac < 0 ? "JameAI: ดาวน์โหลด NNUE ~48 MB (ครั้งเดียว)…"
+            : "JameAI: โหลด NNUE — " + Math.round(frac*100) + "%";
+        });
+        finish("Fairy-Stockfish" + (fsf.nnue ? "+NNUE" : ""));
+      } catch (e) {
+        finish("JS (โหลด Fairy-Stockfish ไม่ได้: " + (e && e.message || e) + ")");
+      } finally { btn.disabled = false; }
       return;
     }
     if (!window.crossOriginIsolated) {
@@ -1236,6 +1348,7 @@ document.querySelectorAll("[data-brain]").forEach((btn) => {
       brainNote.textContent = fsf.nnue
         ? "Fairy-Stockfish + NNUE พร้อม · คอร์เดียวกับ GodratSF+"
         : "Fairy-Stockfish พร้อม (classical eval)";
+      const jn1 = $("jameNote"); if (jn1) jn1.hidden = true;
       maybeEngineMove(); refreshSuggestions();
     } catch (e) {
       brain = "js"; setBrainUI("js");
