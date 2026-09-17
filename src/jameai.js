@@ -129,6 +129,25 @@ export function riskScore(board, m) {
   return { risk, detail };
 }
 
+/**
+ * ตา "กดดัน" ที่ไม่เดินวน — ใช้ตอนเกมยืดเยื้อเพื่อให้ JameAI มีทางเลือกเล่นต่อแทนการวนเสมอ
+ * (กินตัวที่ไม่ขาดทุน / รุก / เข้าประชิดขุน / บุกไปข้างหน้า)  คืนรายการ uci เรียงตามความดุ
+ */
+export function activeCandidates(board, n = 3) {
+  const out = [];
+  for (const m of legalMoves(board)) {
+    const { detail } = riskScore(board, m);
+    if (detail.repeats) continue;
+    let act = 0;
+    if (m.captured !== EMPTY && see(board.board, m) >= 0) act += 40 + Math.min(200, PIECE_VALUE[pcType(m.captured)] / 2);
+    if (detail.check) act += 35;
+    act += detail.nearKing * 12 + detail.forward * 8 + (detail.promote ? 25 : 0);
+    if (act > 0) out.push({ uci: moveToUci(m), act });
+  }
+  out.sort((a, z) => z.act - a.act);
+  return out.slice(0, n).map((x) => x.uci);
+}
+
 /** ฝ่ายที่ถึงตาเดินตอนนี้ กินหมากบนช่อง sq ได้กำไรสุทธิสูงสุดเท่าไหร่ (0 ถ้าไม่คุ้ม) */
 function bestCaptureGainOn(board, sq) {
   if (board.board[sq] === EMPTY) return 0;
@@ -284,16 +303,33 @@ export class JameAI {
     if (!rows.length) return null;
     rows.sort((a, z) => z.score - a.score);
     const best = rows[0];
-
     const vd = (lines.find((l) => l && l.depth) || {}).depth || 10;
+
+    // ---- จิตใจการเอาชนะ: ถ้าตาดีสุดคือ "เดินวน" ทั้งที่ยังไม่แพ้ -> หาทางเล่นต่อ ----
+    // (แกน Fairy-Stockfish ไม่มี contempt จึงต้องทำตรงนี้)
+    if (best.detail.repeats && best.score >= -20) {
+      const tol = o.drawTolerance * depthTrust(vd);
+      const alt = rows.filter((r) => r !== best && !r.detail.repeats && r.score >= best.score - tol && r.score >= -20)
+                      .sort((a, z) => (z.score + z.risk * o.riskWeight) - (a.score + a.risk * o.riskWeight))[0];
+      if (alt) {
+        return {
+          uci: alt.uci, move: alt.move,
+          jame: { mode: 'antidraw', reason: 'ไม่เดินวน', score: alt.score, bestScore: best.score,
+                  give: best.score - alt.score, checked: rows.length },
+        };
+      }
+    }
+
     const need = best.score + requiredEdge(o, best.score, vd);
     const floor = best.score > o.desperateAt ? Math.max(o.minEdge, need) : need;
     const ok = rows.filter((r) => r !== best && r.risk >= o.minRisk && r.score >= floor);
 
     if (!ok.length) {
+      const anySac = rows.some((r) => r !== best && r.risk >= o.minRisk);
       return {
         uci: best.uci, move: best.move,
-        jame: { mode: 'best', reason: 'ทางแหกคำนวณแล้วเสียเปรียบ', checked: rows.length, score: best.score },
+        jame: { mode: 'best', reason: anySac ? 'ทางแหกคำนวณแล้วเสียเปรียบ' : 'ไม่มีตาแหกที่น่าลอง',
+                checked: rows.length, score: best.score },
       };
     }
     ok.sort((a, z) => (z.score + z.risk * o.riskWeight) - (a.score + a.risk * o.riskWeight));

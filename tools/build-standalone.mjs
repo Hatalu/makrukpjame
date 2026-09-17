@@ -129,7 +129,10 @@ self.onmessage = (ev) => {
           if (risk >= o.minRisk) out.push({ uci: moveToUci(m), risk });
         }
         out.sort((a, b) => b.risk - a.risk);
-        self.postMessage({ type:'jame-cands', serial: msg.serial || 0, cands: out.slice(0, o.maxCandidates).map(x => x.uci) });
+        const cands = out.slice(0, o.maxCandidates).map(x => x.uci);
+        // เกมยืดเยื้อ: เพิ่มตากดดันที่ไม่เดินวน ให้เฟส B มีทางเลือก "เล่นต่อ" (จิตใจการเอาชนะ)
+        const active = engine.board.ply >= 30 ? activeCandidates(engine.board, 3).filter(u => !cands.includes(u)) : [];
+        self.postMessage({ type:'jame-cands', serial: msg.serial || 0, cands, active, ply: engine.board.ply });
         break;
       }
       case 'jame-pick': {

@@ -534,7 +534,9 @@ const FSF_DIR = "./fairy/";
 const MOVE_TIME = 1800, ANALYZE_TIME = 1500;
 // JameAI: คิดนานกว่าบอทปกติ + ดูหลายเส้น (MultiPV) + เกลียดเสมอ
 // เฟส A: ค้นหาเต็มกำลัง MultiPV 1 (นานกว่าบอทปกติ -> ลึกกว่า)  เฟส B: เจาะเฉพาะตาแหกด้วย searchmoves
-const JAME_TIME_A = 2400, JAME_TIME_B = 1400;   // (Fairy-Stockfish รุ่นนี้ไม่มี Contempt — จัดการเรื่องเสมอที่ชั้น JameAI)
+// (Fairy-Stockfish รุ่นนี้ไม่มี Contempt — จัดการเรื่องเสมอที่ชั้น JameAI)
+// JameAI คิดนานกว่าบอทปกติ + คิดต่อระหว่างตาคู่ต่อสู้ (ponder) -> เวลาคิดจริงมากกว่ามาก
+let JAME_TIME_A = 3200, JAME_TIME_B = 1500;   // ปรับตามเครื่องตอนโหลด (มือถือใช้น้อยกว่า)
 const usingFsfCore = () => (brain === "fsf" || brain === "jame") && !!fsf.sf;
 // มือถือ = จอเล็ก/จอสัมผัส -> ตั้งค่า Fairy-Stockfish ให้กินแรมน้อย จะได้โหลด NNUE ได้
 const IS_MOBILE = (window.matchMedia && matchMedia("(pointer: coarse)").matches)
@@ -564,7 +566,7 @@ const withTimeout = (p, ms, label) => Promise.race([
 ]);
 const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent || "")
   || (navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1);
-
+if (IS_MOBILE) { JAME_TIME_A = 2200; JAME_TIME_B = 1000; }
 const fsf = {
   sf:null, nnue:false, _readyCb:null, curSerial:0, mode:null, multipv:1,
   searching:false, ignoreNext:0,   // กัน bestmove ค้างจากการ stop มาปนกับการค้นหาใหม่
@@ -598,6 +600,10 @@ const fsf = {
     this.send("setoption name UCI_Variant value makruk");
     this.send("setoption name Threads value " + threads);
     this.send("setoption name Hash value " + hashMB);
+    this.baseThreads = threads; this.baseHash = hashMB; this.boosted = false;
+    // JameAI: ใช้ CPU เต็มกว่าปกติ (เดสก์ท็อป: เธรดเกือบทั้งหมด + hash ใหญ่ขึ้น) — มือถือคงเดิมกันแรมไม่พอ
+    this.jameThreads = IS_MOBILE ? threads : Math.max(threads, Math.min(6, cores - 1));
+    this.jameHash = IS_MOBILE ? hashMB : 128;
     try { await withTimeout(this.ready(), 15000, "engine ตอบสนอง"); }
     catch (e) { this._kill(); throw e; }
     // เขียน NNUE net ลง MEMFS — ถ้าแรมไม่พอ ลองใหม่ด้วย Hash ที่เล็กลงอีก
@@ -647,7 +653,7 @@ const fsf = {
   onLine(line) {
     if (line === "readyok") { const c=this._readyCb; this._readyCb=null; if(c) c(); return; }
     if (line.indexOf("info ")===0 && line.indexOf(" pv ")>0) {
-      if (this.curSerial !== goSerial && this.mode !== "analyze") return;
+      if (this.curSerial !== goSerial && this.mode !== "analyze" && this.mode !== "ponder") return;
       const d=/\bdepth (\d+)/.exec(line), sc=/\bscore (cp|mate) (-?\d+)/.exec(line),
             mp=/\bmultipv (\d+)/.exec(line), nd=/\bnodes (\d+)/.exec(line), ns=/\bnps (\d+)/.exec(line);
       const pv = line.split(" pv ")[1].trim().split(/\s+/);
@@ -655,10 +661,10 @@ const fsf = {
       if (this.mode === "analyze") {
         analysis.onFsfInfo({ idx:(mp?+mp[1]:1), score, mate:(sc&&sc[1]==="mate")?+sc[2]:undefined,
           depth:d?+d[1]:0, pv, serial:this.curSerial });
-      } else if (this.mode === "jame") {
+      } else if (this.mode === "jame" || this.mode === "ponder") {
         const idx = mp ? +mp[1] : 1;
-        this.jameRows[idx] = { uci: pv[0], score, depth: d?+d[1]:0 };
-        if (this.jamePhase === "A") onEngineMessage({ type:"info", serial:this.curSerial, depth:d?+d[1]:0, score,
+        this.jameRows[idx] = { uci: pv[0], score, depth: d?+d[1]:0, pv };
+        if (this.mode === "jame" && this.jamePhase === "A") onEngineMessage({ type:"info", serial:this.curSerial, depth:d?+d[1]:0, score,
           scoreType:(sc&&sc[1]==="mate")?"mate":"cp", mate:(sc&&sc[1]==="mate")?+sc[2]:undefined,
           nodes:nd?+nd[1]:0, nps:ns?+ns[1]:0, pv, pvSan:null });
       } else {
@@ -689,9 +695,25 @@ const fsf = {
   },
   _setContempt(c){ /* Fairy-Stockfish 1.1.x ไม่มี option Contempt — คงไว้เป็น no-op */ this.contempt = c; },
   goJame(kind) {
+    // ---- ponder hit? : เราคิดตาที่คู่ต่อสู้ "น่าจะเดิน" ไว้ล่วงหน้าแล้ว และเขาเดินตามนั้นจริง ----
+    if (this.mode === "ponder" && this.ponder && kind !== "hint"
+        && uciHistory.length && uciHistory[uciHistory.length - 1] === this.ponder.move) {
+      const elapsed = performance.now() - this.ponder.t0;
+      this.ponder = null;
+      this.mode = "jame"; this.curSerial = goSerial; this.jamePhase = "A";
+      this.jameCands = undefined; this.jameActive = []; this.jameBestA = null; this.jameKind = kind;
+      this.jameHit = Math.round(elapsed);
+      post({ type:"jame-cands", serial: goSerial });
+      // ค้นหาเดิมยังวิ่งอยู่บนตำแหน่งที่ถูกต้อง -> ให้คิดต่ออีกนิดแล้วค่อยหยุด (เวลารวม = ponder + ส่วนนี้)
+      const extra = Math.max(350, JAME_TIME_A - elapsed * 0.6);
+      const ser = goSerial;
+      setTimeout(() => { if (this.mode === "jame" && this.jamePhase === "A" && this.curSerial === ser && this.searching) this.send("stop"); }, extra);
+      return;
+    }
+    if (this.mode === "ponder") this.cancelPonder();
     if (this.searching) this.stop();
     this.mode = "jame"; this.curSerial = goSerial; this.jamePhase = "A"; this.jameRows = {};
-    this.jameCands = undefined; this.jameBestA = null; this.jameKind = kind;
+    this.jameCands = undefined; this.jameActive = []; this.jameBestA = null; this.jameKind = kind; this.jameHit = 0;
     this._setMultipv(1); this._setContempt(45);
     post({ type:"jame-cands", serial: goSerial });          // ขอรายชื่อตาแหกจาก worker (เร็ว)
     this.send("position fen " + baseFen + (uciHistory.length ? " moves "+uciHistory.join(" ") : ""));
@@ -700,10 +722,14 @@ const fsf = {
   _jameAfterA() {
     // เฟส A จบ + รู้รายชื่อตาแหกแล้ว -> ตัดสินว่าต้องเฟส B ไหม
     const best = this.jameBestA;
-    const cands = (this.jameCands || []).filter(u => u !== best.uci);
+    const sacs = (this.jameCands || []).filter(u => u !== best.uci);
+    // เกมยืดเยื้อ/สูสี: เอาตากดดันที่ไม่เดินวนมาเทียบด้วย (จิตใจการเอาชนะ — ไม่ยอมวนเสมอ)
+    const drawish = Math.abs(best.score) <= 60;
+    const active = drawish ? (this.jameActive || []).filter(u => u !== best.uci && !sacs.includes(u)) : [];
+    const cands = [...sacs, ...active].slice(0, 6);
     if (!cands.length) {
       onEngineMessage({ type:"bestmove", serial:this.curSerial, move:best.uci, san:null,
-        jame:{ mode:"best", reason:"ไม่มีตาแหกที่น่าลอง" }, note:"ยังไม่มีช่องแหก — เดินตามหลักไปก่อน" });
+        jame:{ mode:"best", reason:"ไม่มีตาแหกที่น่าลอง", hit:this.jameHit }, note:"ยังไม่มีช่องแหก — เดินตามหลักไปก่อน" });
       this.mode = null; return;
     }
     this.jamePhase = "B"; this.jameRows = {};
@@ -715,6 +741,28 @@ const fsf = {
     const ser = this.curSerial;
     setTimeout(() => { if (this.mode === "jame" && this.jamePhase === "B" && this.curSerial === ser && this.searching) this.send("stop"); },
       this.jameKind === "hint" ? 900 : JAME_TIME_B);
+  },
+  // ---- ponder: คิดล่วงหน้าบนตาที่คาดว่าคู่ต่อสู้จะเดิน ระหว่างที่เขากำลังคิด ----
+  startPonder(expectedReply) {
+    if (!this.sf || !expectedReply || this.searching) return;
+    this.ponder = { move: expectedReply, t0: performance.now() };
+    this.mode = "ponder"; this.jameRows = {}; this.curSerial = goSerial;
+    this._setMultipv(1);
+    this.send("position fen " + baseFen + " moves " + [...uciHistory, expectedReply].join(" "));
+    this.send("go infinite");
+    const jn = $("jameNote"); if (jn && brain === "jame") jn.textContent = "JameAI: กำลังคิดล่วงหน้า (คาดว่าคุณจะเดิน " + fmtMove(expectedReply) + ")…";
+  },
+  boost(on) {
+    if (!this.sf || this.boosted === !!on) return;
+    this.boosted = !!on;
+    if (this.searching) this.stop();
+    this.send("setoption name Threads value " + (on ? this.jameThreads : this.baseThreads));
+    this.send("setoption name Hash value " + (on ? this.jameHash : this.baseHash));
+  },
+  cancelPonder() {
+    if (this.mode !== "ponder") return;
+    this.ponder = null; this.mode = null;
+    if (this.searching) this.stop();
   },
   goMove(kind) {
     if (this.searching) this.stop();
@@ -748,6 +796,9 @@ function onEngineMessage(m) {
       updateTurnText(m.inCheck);
       if (screen === "kom-play") { renderKomStrip(); komCheckProgress(); }
       maybeEngineMove();
+      // JameAI: หลังเราเดินแล้ว -> คิดล่วงหน้าบนตาที่คาดว่าคู่ต่อสู้จะตอบ ระหว่างที่เขากำลังคิด
+      if (brain === "jame" && fsf.sf && fsf.pendingPonder && mode === "bot" && turn === humanSide && !gameOver && !thinking) fsf.startPonder(fsf.pendingPonder);
+      fsf.pendingPonder = null;
       refreshSuggestions();
       break;
     case "legal": legal = m.moves; render(); break;
@@ -768,6 +819,7 @@ function onEngineMessage(m) {
           render(); turnText.textContent = "แนะนำ: " + (m.move); }
       } else if (m.move && !gameOver) {
         if (m.note) showJameNote(m.note, m.jame);
+        if (brain === "jame" && fsf.sf) { const row = Object.values(fsf.jameRows || {}).find(r => r && r.uci === m.move); fsf.pendingPonder = (row && row.pv && row.pv[1]) || null; }
         post({ type:"domove", uci:m.move });
       } else if (!m.move) { turnText.textContent = "บอทไม่มีหมากเดิน"; }
       break;
@@ -778,7 +830,7 @@ function onEngineMessage(m) {
       break;
     case "jame-cands":
       if (fsf.mode === "jame" && m.serial === fsf.curSerial) {
-        fsf.jameCands = m.cands || [];
+        fsf.jameCands = m.cands || []; fsf.jameActive = m.active || [];
         if (fsf.jamePhase === "A" && fsf.jameBestA) fsf._jameAfterA();   // เฟส A จบก่อน cands มาถึง
       }
       break;
@@ -800,14 +852,14 @@ function newGame() {
   { const jn = $("jameNote"); if (jn && brain === "jame") jn.textContent = "JameAI: เกมใหม่"; }
   baseFen = START_FEN; sanList = []; uciHistory = []; selected = -1; lastMove = null;
   hintArrow = null; gameOver = false; pendingGo = null; goSerial++;
-  if (fsf.sf) { fsf.stop(); fsf.newgame(); }
+  if (fsf.sf) { fsf.cancelPonder(); fsf.stop(); fsf.newgame(); }
   resultEl.textContent = ""; engineStat.textContent = "";
   post({ type:"newgame" }); post({ type:"eval" });
 }
 function newGameFromFen(fen) {
   baseFen = fen; sanList = []; uciHistory = []; selected = -1; lastMove = null;
   hintArrow = null; gameOver = false; pendingGo = null; goSerial++;
-  if (fsf.sf) { fsf.stop(); fsf.newgame(); }
+  if (fsf.sf) { fsf.cancelPonder(); fsf.stop(); fsf.newgame(); }
   resultEl.textContent = ""; engineStat.textContent = "";
   post({ type:"position", fen }); post({ type:"eval" });
 }
@@ -962,11 +1014,12 @@ const analysis = {
     if (screen !== "play") return false;   // โหมดหมากกลไม่มีตัวช่วยแนะนำตาเดิน
     if (mode === "setup" || gameOver || thinking || pendingGo) return false;
     if (mode === "bot" && turn !== humanSide) return false;   // ตาบอท — ไม่ต้องแนะนำ
+    if (mode === "bot" && brain === "jame") return false;      // JameAI ใช้เวลาตาคู่ต่อสู้คิดล่วงหน้า -> ไม่แบ่ง CPU ให้ตัวช่วย
     return true;
   },
   request() {
     this.cancel();
-    if (!this.shouldRun()) { this.clearUI(mode==="bot"&&turn!==humanSide ? "— ตาบอท —" : "—"); return; }
+    if (!this.shouldRun()) { this.clearUI(mode==="bot"&&brain==="jame" ? "— JameAI กำลังคิดล่วงหน้า (ปิดตัวช่วยเพื่อให้บอทใช้ CPU เต็ม) —" : mode==="bot"&&turn!==humanSide ? "— ตาบอท —" : "—"); return; }
     const s = ++this.serial; this.running = true;
     suggTurn.textContent = "(ฝ่าย" + (turn==="white"?"ขาว":"ดำ") + ")";
     this.clearUI("กำลังวิเคราะห์…");
@@ -1195,6 +1248,7 @@ $("modeSel").addEventListener("click", (e) => {
   if (want === mode) return;
   [...$("modeSel").children].forEach(x => x.classList.toggle("on", x.dataset.mode === want));
 
+  if (fsf.sf) fsf.cancelPonder();
   if (mode === "setup" && want !== "setup") exitSetup();
   const prev = mode; mode = want;
 
@@ -1225,6 +1279,7 @@ $("undo").addEventListener("click", () => {
   if (!back) return;
   for (let i=0;i<back;i++){ sanList.pop(); uciHistory.pop(); }
   gameOver = false; resultEl.textContent = ""; lastMove = null; hintArrow = null;
+  if (fsf.sf) fsf.cancelPonder();
   post({ type:"undo", count:back }); post({ type:"eval" });
 });
 $("flip").addEventListener("click", () => { flipped = !flipped; render(); });
@@ -1296,7 +1351,7 @@ document.querySelectorAll("[data-brain]").forEach((btn) => {
     const want = btn.dataset.brain;
     if (want === brain || thinking || btn.disabled) return;
     if (want === "js") {
-      if (fsf.sf) fsf.stop();
+      if (fsf.sf) { fsf.cancelPonder(); fsf.stop(); fsf.boost(false); }
       brain = "js"; goSerial++; pendingGo = null; thinking = false;
       frameEl.classList.remove("is-thinking"); setBrainUI("js");
       brainNote.textContent = "เอนจิ้น JS (เบา · ทำงานได้ทุกที่)";
@@ -1314,7 +1369,7 @@ document.querySelectorAll("[data-brain]").forEach((btn) => {
         const jn = $("jameNote"); if (jn) { jn.hidden = false; jn.className = "jame-note"; jn.textContent = "JameAI: กำลังรอตาเดิน…"; }
         maybeEngineMove(); refreshSuggestions();
       };
-      if (fsf.sf) { finish("Fairy-Stockfish" + (fsf.nnue ? "+NNUE" : "")); btn.disabled = false; return; }
+      if (fsf.sf) { fsf.boost(true); finish("Fairy-Stockfish" + (fsf.nnue ? "+NNUE" : "")); btn.disabled = false; return; }
       if (!window.crossOriginIsolated) { finish("JS"); btn.disabled = false; return; }
       brainNote.textContent = "JameAI: กำลังโหลดแกน Fairy-Stockfish…";
       try {
@@ -1322,7 +1377,7 @@ document.querySelectorAll("[data-brain]").forEach((btn) => {
           brainNote.textContent = frac < 0 ? "JameAI: ดาวน์โหลด NNUE ~48 MB (ครั้งเดียว)…"
             : "JameAI: โหลด NNUE — " + Math.round(frac*100) + "%";
         });
-        finish("Fairy-Stockfish" + (fsf.nnue ? "+NNUE" : ""));
+        fsf.boost(true); finish("Fairy-Stockfish" + (fsf.nnue ? "+NNUE" : ""));
       } catch (e) {
         finish("JS (โหลด Fairy-Stockfish ไม่ได้: " + (e && e.message || e) + ")");
       } finally { btn.disabled = false; }
@@ -1343,6 +1398,7 @@ document.querySelectorAll("[data-brain]").forEach((btn) => {
           ? "กำลังดาวน์โหลดโครงข่าย NNUE ~48 MB (ครั้งเดียว)…"
           : "โหลดโครงข่าย NNUE (makruk) — " + Math.round(frac*100) + "% · ~48 MB ครั้งเดียว";
       });
+      fsf.cancelPonder(); fsf.boost(false);
       brain = "fsf"; goSerial++; pendingGo = null; thinking = false;
       frameEl.classList.remove("is-thinking"); setBrainUI("fsf");
       brainNote.textContent = fsf.nnue
