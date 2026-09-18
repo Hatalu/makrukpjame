@@ -79,24 +79,28 @@
   }
   .theme-btn:hover { border-color:var(--brass); color:var(--ink); }
 
-  /* ===== layout: board ซ้าย/บน · แนะนำตาเดิน ขวา · ควบคุม+รายการเดิน ล่าง ===== */
+  /* ===== layout: กระดานซ้าย · แถบข้างเดียวทางขวา (ควบคุม/สถานะ/แนะนำ/รายการเดิน) — หน้าไม่ต้องเลื่อน ===== */
   .wrap {
-    display:grid; gap:clamp(16px,2.6vw,32px);
-    grid-template-columns:minmax(0,1fr) 320px;
-    grid-template-areas: "board suggest" "controls suggest" "moves suggest";
-    padding:clamp(14px,3vw,32px) clamp(12px,4vw,40px) 40px;
-    max-width:1200px; margin:0 auto; align-items:start;
-    --board-size:min(52vw, 58vh, 560px);
-  }
-  @media (max-width:980px) {
-    .wrap { grid-template-columns:minmax(0,1fr);
-      grid-template-areas:"board" "suggest" "controls" "moves"; --board-size:min(92vw, 60vh); }
+    display:grid; gap:clamp(12px,2vw,22px);
+    grid-template-columns:minmax(0,1fr) 360px;
+    grid-template-areas:"board side";
+    padding:clamp(10px,1.6vw,18px) clamp(12px,3vw,32px) 16px;
+    max-width:1240px; margin:0 auto; align-items:start;
+    --board-size:min(52vw, calc(100vh - 150px), 600px);
   }
   .col-board { grid-area:board; }
-  .col-suggest { grid-area:suggest; }
-  .col-controls { grid-area:controls; }
-  .col-moves { grid-area:moves; }
-  @media (min-width:981px) { .col-suggest { position:sticky; top:16px; } }
+  .col-side  { grid-area:side; display:flex; flex-direction:column; gap:10px; min-width:0; }
+  @media (min-width:981px) {
+    .col-side { position:sticky; top:10px; max-height:calc(100vh - 20px); overflow-y:auto; padding-right:2px; }
+    .col-side::-webkit-scrollbar { width:8px; } .col-side::-webkit-scrollbar-thumb { background:var(--line); border-radius:4px; }
+  }
+  @media (max-width:980px) {
+    .wrap { grid-template-columns:minmax(0,1fr); grid-template-areas:"board" "side"; --board-size:min(92vw, 56vh); }
+  }
+  .col-side .card { margin-bottom:0; padding:11px 13px; }
+  .col-side .card h2 { margin-bottom:7px; }
+  /* โหมดตั้งหมาก: โชว์เฉพาะถาดหมาก+ปุ่มตั้ง ซ่อนของที่ไม่เกี่ยว */
+  .wrap.setupmode #suggCard, .wrap.setupmode #movesCard, .wrap.setupmode #statusCard { display:none; }
 
   /* โหมดหมากกล = แก้โจทย์ ไม่มีตัวช่วย: ซ่อนแนะนำตาเดิน / แถบแต้ม / ปุ่มช่วยต่าง ๆ */
   .wrap.kom #suggCard,
@@ -108,7 +112,7 @@
   .wrap.kom #gonow,
   .wrap.kom #brainSel,
   .wrap.kom #brainNote,
-  .wrap.kom .col-controls > .card > h2 { display:none !important; }
+  .wrap.kom #modeCard > h2 { display:none !important; }
 
   /* ===== board ===== */
   .board-stage { display:flex; gap:12px; align-items:flex-start; }
@@ -214,7 +218,7 @@
   .sugg-meta { font-size:11.5px; color:var(--ink-soft); margin-top:8px; font-variant-numeric:tabular-nums; }
 
   /* ===== setup palette ===== */
-  .palette { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-top:10px; }
+  .palette { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:8px; }
   .palette button {
     aspect-ratio:1; border:1px solid var(--line); border-radius:7px; background:var(--board-wood);
     cursor:grab; padding:3px; display:flex; align-items:center; justify-content:center; touch-action:none;
@@ -275,6 +279,8 @@
   .bigbtn.ghost { background:var(--surface-2); color:var(--ink); border:1px solid var(--line); }
   .msg-err { color:var(--neg); font-size:13px; min-height:1.2em; margin-top:8px; }
   .homecards { display:grid; gap:12px; margin:8px 0 16px; }
+  .homesplit { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:480px) { .homesplit { grid-template-columns:1fr; } }
   .homecard { text-align:left; font:inherit; cursor:pointer; padding:18px 20px; border-radius:11px;
     border:1px solid var(--line); background:var(--surface-2); color:var(--ink); }
   .homecard:hover { border-color:var(--brass); }
@@ -346,8 +352,11 @@
     <h1>เลือกโหมด</h1>
     <p class="lead" id="homeHi"></p>
     <div class="homecards">
-      <button class="homecard" data-go="play" type="button"><b>เล่นปกติ</b><span>เล่นกับ AI / เล่น 2 คน / ตั้งหมาก + แนะนำตาเดิน</span></button>
-      <button class="homecard" data-go="kom" type="button"><b>หมากกล</b><span>แก้หมากกล — คุณเป็นฝ่ายขาว · เอนจิ้นแรงสุดเป็นฝ่ายดำ</span></button>
+      <div class="homesplit">
+        <button class="homecard" data-go="solo" type="button"><b>เล่นคนเดียว</b><span>เดินเองทั้งสองฝ่าย · ตั้งหมากฝึกได้</span></button>
+        <button class="homecard" data-go="ai" type="button"><b>เล่นกับ AI</b><span>สู้กับบอท · JameAI</span></button>
+      </div>
+      <button class="homecard" data-go="kom" type="button"><b>เล่นหมากกล</b><span>แก้หมากกล — คุณเป็นฝ่ายขาว</span></button>
       <button class="homecard dev" data-go="dev" type="button" hidden><b>ฟังก์ชัน Dev</b><span>สถิติผู้เล่น · ตั้งกระดานหมากกล · จัดการบัญชี</span></button>
     </div>
     <button class="bigbtn ghost" id="logoutBtn" type="button">ออกจากระบบ</button>
@@ -404,30 +413,13 @@
     <p class="legend" id="legend"></p>
   </section>
 
-  <!-- ===== แนะนำตาเดิน (ด้านข้าง) ===== -->
-  <aside class="col-suggest">
-    <div class="card" id="suggCard">
-      <h2>แนะนำตาเดิน <span class="sub" id="suggTurn"></span></h2>
-      <div class="sugg-list" id="suggList"><div class="sugg-meta">— รอตำแหน่ง —</div></div>
-      <div class="sugg-meta" id="suggMeta"></div>
-    </div>
-    <div class="card">
-      <h2>สถานะ</h2>
-      <div class="turn"><span class="chip" id="turnChip"></span><span id="turnText">กำลังโหลดเอนจิ้น…</span></div>
-      <div><span class="count-pill" id="countPill">ยังไม่เริ่มนับ</span></div>
-      <div class="result" id="result"></div>
-      <div class="stat" id="engineStat" style="margin-top:8px"></div>
-      <div class="jame-note" id="jameNote" hidden></div>
-    </div>
-  </aside>
-
-  <!-- ===== ควบคุม (ด้านล่างกระดาน) ===== -->
-  <section class="col-controls">
-    <div class="card">
+  <!-- ===== แถบข้าง (ขวากระดาน): ควบคุม → สถานะ → แนะนำ → รายการเดิน ===== -->
+  <aside class="col-side">
+    <div class="card" id="modeCard">
       <h2>โหมด</h2>
       <div class="segbtns" id="modeSel">
-        <button type="button" data-mode="bot" class="on">เล่นกับบอท</button>
-        <button type="button" data-mode="2p">เล่น 2 คน</button>
+        <button type="button" data-mode="bot" class="on">เล่นกับ AI</button>
+        <button type="button" data-mode="2p">เล่นคนเดียว</button>
         <button type="button" data-mode="setup">ตั้งหมาก</button>
       </div>
 
@@ -441,15 +433,15 @@
           <button class="act" id="side" type="button" data-botmode>คุณเล่น: ขาว</button>
           <button class="act" id="gonow" type="button" data-botmode>ให้บอทเดิน</button>
         </div>
-        <div class="segbtns" id="brainSel" style="margin-top:12px">
-          <button type="button" data-brain="js" class="on">เอนจิ้นเบา (JS)</button>
+        <div class="segbtns" id="brainSel" style="margin-top:10px">
+          <button type="button" data-brain="js" class="on">เอนจิ้นเบา</button>
           <button type="button" data-brain="fsf">Fairy-Stockfish</button>
           <button type="button" data-brain="jame" title="บุคลิกนักแหกหมาก — ไม่ชอบเสมอ ทิ้งหมากเมื่อคำนวณแล้วยังได้เปรียบ">JameAI</button>
         </div>
         <p class="hintline" id="brainNote">บอทเล่นเต็มกำลัง (Best Move) เสมอ</p>
       </div>
 
-      <!-- โหมดตั้งหมาก -->
+      <!-- โหมดตั้งหมาก: ถาดหมากอยู่ข้างกระดาน -->
       <div id="setupControls" hidden>
         <div class="palette" id="palette"></div>
         <div class="setup-row">
@@ -460,7 +452,7 @@
 
         <!-- Dev: เป้าหมายหมากกล (แสดงเฉพาะตอนบันทึกเป็นหมากกล) -->
         <div id="komGoalBox" hidden>
-          <p class="hintline" style="margin-top:12px"><b>เป้าหมายหมากกล</b></p>
+          <p class="hintline" style="margin-top:10px"><b>เป้าหมายหมากกล</b></p>
           <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px">
             <input type="radio" name="komGoal" value="win-in-n" checked>
             ขาวเดินก่อน <input type="number" id="komGoalN" value="3" min="1" max="30"
@@ -478,28 +470,30 @@
           <button class="act primary" id="setupPlay" type="button">เริ่มเล่นจากตำแหน่งนี้</button>
           <span class="msg" id="setupMsg"></span>
         </div>
-        <p class="hintline"><b>ลากหมากจากถาดมาวางบนกระดาน</b> หรือแตะช่องเพื่อวาง · <b>ลากหมากบนกระดานไปช่องอื่น</b> เพื่อย้าย · ลากออกนอกกระดาน = ลบ · เลือก 🚫 แล้วแตะเพื่อลบ · ห้ามขุนเกิน 1 / เรือ-ม้า-โคน เกิน 2 (เม็ดเกินได้)</p>
+        <p class="hintline">ลากหมากจากถาดไปวาง · ลากบนกระดานเพื่อย้าย · ลากออกนอกกระดาน = ลบ</p>
       </div>
     </div>
-  </section>
 
-  <!-- ===== รายการเดิน ===== -->
-  <section class="col-moves">
-    <div class="card">
+    <div class="card" id="statusCard">
+      <h2>สถานะ</h2>
+      <div class="turn"><span class="chip" id="turnChip"></span><span id="turnText">กำลังโหลดเอนจิ้น…</span></div>
+      <div><span class="count-pill" id="countPill">ยังไม่เริ่มนับ</span></div>
+      <div class="result" id="result"></div>
+      <div class="stat" id="engineStat" style="margin-top:6px"></div>
+      <div class="jame-note" id="jameNote" hidden></div>
+    </div>
+
+    <div class="card" id="suggCard">
+      <h2>แนะนำตาเดิน <span class="sub" id="suggTurn"></span></h2>
+      <div class="sugg-list" id="suggList"><div class="sugg-meta">— รอตำแหน่ง —</div></div>
+      <div class="sugg-meta" id="suggMeta"></div>
+    </div>
+
+    <div class="card" id="movesCard">
       <h2>รายการเดิน</h2>
       <div class="moves" id="moves"></div>
     </div>
-  </section>
-
-  <details class="formations">
-    <summary>รูปแบบเปิดหมากสไตล์ GodratSF+ (18 แบบ)</summary>
-    <div class="fgrid" id="fgrid"></div>
-  </details>
-
-  <p class="foot">
-    เอนจิ้น JS ฝังในไฟล์ + Fairy-Stockfish WASM (variant makruk + NNUE) · ทุกอย่างทำงานในเบราว์เซอร์ ไม่ส่งข้อมูลออก ·
-    <a href="https://github.com/Hatalu/makrukpjame" target="_blank" rel="noopener">source</a>
-  </p>
+  </aside>
 </main>
 
 <script>
@@ -937,6 +931,7 @@ function pieceEl(p) {
   return pe;
 }
 function render() {
+  document.querySelector(".wrap").classList.toggle("setupmode", mode === "setup");
   const order = [];
   for (let r=7;r>=0;r--) for (let f=0;f<8;f++) order.push(r*8+f);
   const cells = flipped ? order.slice().reverse() : order;
@@ -998,7 +993,10 @@ function sizeBoard() {
   const avail = col ? col.clientWidth : 0;
   if (!avail) return;
   const pad = parseFloat(getComputedStyle(frameEl).paddingLeft) || 16;
-  const px = Math.max(200, Math.min(560, Math.floor(avail - 14 - 12 - pad*2)));
+  // จำกัดทั้งความกว้างคอลัมน์และความสูงจอ -> หน้าไม่ต้องเลื่อน
+  const strip = $("komStrip") && !$("komStrip").hidden ? $("komStrip").offsetHeight + 12 : 0;
+  const byH = window.innerHeight - 178 - strip - pad*2;
+  const px = Math.max(200, Math.min(600, Math.floor(avail - 14 - 12 - pad*2), Math.floor(byH)));
   wrapEl.style.setProperty("--board-size", px + "px");
 }
 window.addEventListener("resize", sizeBoard);
@@ -1095,8 +1093,10 @@ function enterSetup() {
 function exitSetup() { frameEl.classList.remove("setup"); }
 function buildPalette() {
   const el = $("palette"); el.innerHTML = "";
-  const specs = [["wK"],["wM"],["wR"],["wN"],["wS"],["wP"],["erase"],
-                 ["bK"],["bM"],["bR"],["bN"],["bS"],["bP"],[""]];
+  const specs = [["wK"],["wM"],["wR"],["wN"],
+                 ["wS"],["wP"],["erase"],[""],
+                 ["bK"],["bM"],["bR"],["bN"],
+                 ["bS"],["bP"],[""],[""]];
   for (const [k] of specs) {
     const b = document.createElement("button"); b.type = "button";
     if (k === "erase") { b.className = "erase"; b.textContent = "🚫"; b.dataset.tool = "erase"; }
@@ -1427,6 +1427,7 @@ themeBtn.addEventListener("click", () => {
 /* ================= ฐานข้อมูลกลาง (Supabase) =================
    ถ้าตั้งค่าใน web/supabase-config.js -> บัญชี / หมากกล / สถิติ ใช้ร่วมกันทุกเครื่อง
    ถ้าไม่ได้ตั้งค่า -> ทำงานแบบเดิม (localStorage เครื่องใครเครื่องมัน)             */
+const NAME_ROW = "__name__";   // แถวพิเศษใน mk_stats ที่เก็บชื่อเล่นผู้เล่น (goal = ชื่อ)
 const cloud = {
   sb: null, on: false, _last: 0, _p: null,
   async init() {
@@ -1445,11 +1446,10 @@ const cloud = {
     this._last = Date.now();
     this._p = (async () => {
       try {
-        const [acc, puz, sta, nam] = await Promise.all([
+        const [acc, puz, sta] = await Promise.all([
           this.sb.from("mk_accounts").select("*"),
           this.sb.from("mk_puzzles").select("*"),
           this.sb.from("mk_stats").select("*"),
-          this.sb.from("mk_names").select("*"),
         ]);
         if (!acc.error && acc.data)
           localStorage.setItem("mk_accounts", JSON.stringify(acc.data.map(a => ({ id:String(a.id), pw:a.pw, role:a.role || "user" }))));
@@ -1457,16 +1457,18 @@ const cloud = {
           localStorage.setItem("mk_custom_puzzles", JSON.stringify(
             puz.data.map(p => ({ id:p.id, name:p.name, fen:p.fen, note:p.note || "", goal:p.goal || { type:"win" } }))));
         if (!sta.error && sta.data) {
-          const s = {};
-          for (const r of sta.data)
+          // ชื่อเล่นผู้เล่นเก็บในตาราง mk_stats ด้วย (แถว puzzle_id = "__name__") -> ไม่ต้องสร้างตารางเพิ่ม
+          const s = {}, n = {};
+          for (const r of sta.data) {
+            if (r.puzzle_id === NAME_ROW) { if (r.goal) n[String(r.uid)] = String(r.goal); continue; }
             (s[String(r.uid)] = s[String(r.uid)] || {})[r.puzzle_id] =
               { moves:r.moves|0, status:r.status || "", goal:r.goal || "", passed:!!r.passed,
                 ts: r.ts ? new Date(r.ts).getTime() : Date.now() };
+          }
           localStorage.setItem("mk_stats", JSON.stringify(s));
-        }
-        if (!nam.error && nam.data) {
-          const n = {};
-          for (const r of nam.data) n[String(r.id)] = r.name || "";
+          // ชื่อที่เคยตั้งไว้ในเครื่องนี้แต่ยังไม่อยู่บนฐานข้อมูลกลาง -> ส่งขึ้นให้ (ย้ายข้อมูลครั้งเดียว)
+          let local = {}; try { local = JSON.parse(localStorage.getItem("mk_names") || "{}"); } catch (e) {}
+          for (const [uid, nm] of Object.entries(local)) if (nm && !n[uid]) { n[uid] = nm; this.saveName(uid, nm); }
           localStorage.setItem("mk_names", JSON.stringify(n));
         }
         if (screen === "kom") renderKomGrid();
@@ -1496,9 +1498,14 @@ const cloud = {
   },
   saveAccount(a) { if (this.on) this._w(this.sb.from("mk_accounts").upsert({ id:String(a.id), pw:a.pw, role:a.role }), "saveAccount"); },
   delAccount(id) { if (this.on) this._w(this.sb.from("mk_accounts").delete().eq("id", String(id)), "delAccount"); },
-  saveName(uid, name) { if (this.on) this._w(this.sb.from("mk_names").upsert({ id:String(uid), name:name || "" }), "saveName"); },
-  async delStatsForUser(uid) { if (this.on) { try { await this.sb.from("mk_stats").delete().eq("uid", String(uid)); } catch (e) { console.warn("[cloud] delStatsForUser:", e); } } },
-  async clearStats() { if (this.on) { try { await this.sb.from("mk_stats").delete().not("uid", "is", null); } catch (e) { console.warn("[cloud] clearStats:", e); } } },
+  saveName(uid, name) {
+    if (!this.on) return;
+    const v = (name || "").trim();
+    if (v) this._w(this.sb.from("mk_stats").upsert({ uid:String(uid), puzzle_id:NAME_ROW, moves:0, status:"name", goal:v, passed:false, ts:new Date().toISOString() }), "saveName");
+    else   this._w(this.sb.from("mk_stats").delete().eq("uid", String(uid)).eq("puzzle_id", NAME_ROW), "delName");
+  },
+  async delStatsForUser(uid) { if (this.on) { try { await this.sb.from("mk_stats").delete().eq("uid", String(uid)).neq("puzzle_id", NAME_ROW); } catch (e) { console.warn("[cloud] delStatsForUser:", e); } } },
+  async clearStats() { if (this.on) { try { await this.sb.from("mk_stats").delete().not("uid", "is", null).neq("puzzle_id", NAME_ROW); } catch (e) { console.warn("[cloud] clearStats:", e); } } },
 };
 
 /* ================= LOGIN / ROLES / SCREENS ================= */
@@ -1562,24 +1569,26 @@ $("logoutBtn").addEventListener("click", () => {
   showScreen("login");
 });
 $("homeBtn").addEventListener("click", () => showScreen("home"));
-function enterNormalPlay() {
+function enterNormalPlay(startMode) {
   // เข้า "เล่นปกติ" ทุกครั้ง -> เริ่มกระดานมาตรฐานใหม่เสมอ
   // (กันตำแหน่งค้างจากการแก้หมากกล / โหมดตั้งหมาก / เกมก่อนหน้า)
   activePuzzle = null; exitKom();
   devSaveMode = false; devEditId = null; $("komGoalBox").hidden = true;
   if (mode === "setup") exitSetup();
-  mode = "bot"; prevPlayMode = "bot";
+  mode = (startMode === "2p") ? "2p" : "bot"; prevPlayMode = mode;
   $("setupPlay").textContent = "เริ่มเล่นจากตำแหน่งนี้";
-  [...$("modeSel").children].forEach(x => x.classList.toggle("on", x.dataset.mode === "bot"));
+  [...$("modeSel").children].forEach(x => x.classList.toggle("on", x.dataset.mode === mode));
   $("playControls").hidden = false; $("setupControls").hidden = true;
-  document.querySelectorAll("[data-botmode]").forEach(x => x.hidden = false);
+  document.querySelectorAll("[data-botmode]").forEach(x => x.hidden = (mode !== "bot"));
   humanSide = "white"; flipped = false; $("side").textContent = "คุณเล่น: ขาว";
   newGame();
   showScreen("play");
 }
 document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => {
   const g = b.dataset.go;
-  if (g === "play")  { enterNormalPlay(); }
+  if (g === "play")  { enterNormalPlay("bot"); }
+  else if (g === "solo") { enterNormalPlay("2p"); }
+  else if (g === "ai")   { enterNormalPlay("bot"); }
   else if (g === "kom")  { showScreen("kom"); }
   else if (g === "dev")  { if (session && session.role === "dev") showScreen("dev"); }
   else if (g === "home") { showScreen("home"); }
@@ -1930,7 +1939,7 @@ const FORMATIONS = [
   ["NM","ม้าอุปการ + เม็ดซ้าย","ผสมแนว N กับ M"],
   ["NO","ม้าอุปการ + เรือมเหศวร","ผสมแนว N กับ O"],
 ];
-$("fgrid").innerHTML = FORMATIONS.map(([c,th,d]) =>
+if ($("fgrid")) $("fgrid").innerHTML = FORMATIONS.map(([c,th,d]) =>
   `<div class="fitem"><div class="code">${c}</div><div class="th">${th}</div><div class="desc">${d}</div></div>`).join("");
 (() => {
   const items = [["wK","ขุน"],["wM","เม็ด"],["wR","เรือ"],["wN","ม้า"],["wS","โคน"],["wP","เบี้ย"]];
